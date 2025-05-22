@@ -1,0 +1,21 @@
+# Ignorer les caches Python
+__pycache__/
+*.pyc
+
+# Ignorer les fichiers de base de données
+
+
+# Ignorer les journaux
+*.log
+
+# Ignorer les environnements virtuels
+
+
+# Ignorer les dossiers de migration (gérés par Flask-Migrate)
+migrations/
+
+# Ignorer les fichiers spécifiques à macOS
+.DS_Store
+
+# Ignorer les fichiers de configuration locale
+instance/
