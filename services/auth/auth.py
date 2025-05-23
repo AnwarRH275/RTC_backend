@@ -134,6 +134,32 @@ class deleteUsers(Resource):
             return jsonify({'message': f'User {username} not found.'})
 
 
+
+# model (serializer) for user data
+user_model = auth_ns.model(
+    "User",
+    {
+        "id": fields.Integer(),
+        "username": fields.String(),
+        "email": fields.String(),
+        "tel": fields.String(),
+        "nom": fields.String(),
+        "prenom": fields.String(),
+        "sexe": fields.String(),
+        "date_naissance": fields.String(),
+        "subscription_plan": fields.String(),
+        "payment_status": fields.String(),
+    }
+)
+
+@auth_ns.route('/users')
+class UserListResource(Resource):
+    @auth_ns.marshal_list_with(user_model)
+    def get(self):
+        '''Récupérer tous les utilisateurs'''
+        users = User.query.all()
+        return users
+
 @auth_ns.route('/refresh')
 class RefreshResource(Resource):
     @jwt_required(refresh=True)
@@ -142,3 +168,14 @@ class RefreshResource(Resource):
         new_access_token = create_access_token(identity=current_user)
 
         return make_response(jsonify({"access_token": new_access_token}), 200)
+
+@auth_ns.route('/MyPlan')
+class MyPlanResource(Resource):
+    @jwt_required()
+    def get(self):
+        current_user_identity = get_jwt_identity()
+        user = User.query.filter_by(username=current_user_identity).first()
+        if user:
+            return jsonify({'subscription_plan': user.subscription_plan})
+        else:
+            return jsonify({'message': 'User not found'}), 404

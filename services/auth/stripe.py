@@ -52,19 +52,19 @@ PLANS = {
         "name": "Pack Écrit Standard",
         "price": 1499,  # 14.99 CAD
         "usages": 5,
-        "product_id": "prod_SKWM4seMoxaocw",
+        "product_id": "prod_SMeQcS5gdyO7Nh",
     },
     "performance": {
         "name": "Pack Écrit Performance",
         "price": 2999,  # 29.99 CAD
         "usages": 15,
-        "product_id": "prod_SKWO5IJ5QkHPiN",
+        "product_id": "prod_SMePWWnxhhQXZJ",
     },
     "pro": {
         "name": "Pack Écrit Pro",
         "price": 4999,  # 49.99 CAD
         "usages": 30,
-        "product_id": "prod_SKWPIe4wShqDD8",
+        "product_id": "prod_SMePWWnxhhQXZJ",
     },
 }
 
