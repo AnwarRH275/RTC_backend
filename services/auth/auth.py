@@ -23,6 +23,8 @@ signup_model = auth_ns.model(
         "prenom": fields.String(),
         "sexe": fields.String(),
         "date_naissance": fields.String(),
+        "plan": fields.String(),
+        "role": fields.String(),
 
     }
 )
@@ -45,16 +47,27 @@ class SignUp(Resource):
         data = request.get_json()
         username_to_update = User.query.filter_by(
             username=data.get('username')).first()
+        
+        if not username_to_update:
+            return make_response(jsonify({"message": "User not found"}), 404)
 
-        username_to_update.update(
-            nom=data.get('nom'),
-            tel=data.get('tel'),
-            email=data.get('email'),
-            sexe=data.get('sexe'),
-            date_naissance=data.get('date_naissance')
-        )
-
-        return data
+        # Update all fields
+        username_to_update.email = data.get('email', username_to_update.email)
+        username_to_update.nom = data.get('nom', username_to_update.nom)
+        username_to_update.prenom = data.get('prenom', username_to_update.prenom)
+        username_to_update.tel = data.get('tel', username_to_update.tel)
+        username_to_update.sexe = data.get('sexe', username_to_update.sexe)
+        username_to_update.date_naissance = data.get('date_naissance', username_to_update.date_naissance)
+        username_to_update.subscription_plan = data.get('plan', username_to_update.subscription_plan)
+        username_to_update.role = data.get('role', username_to_update.role)
+        
+        # Update password only if provided
+        if data.get('password'):
+            username_to_update.password = generate_password_hash(data.get('password'))
+        
+        db.session.commit()
+        
+        return make_response(jsonify({"message": "User updated successfully", "status": "success"}), 200)
 
     @auth_ns.expect(signup_model)
     def post(self):
@@ -149,6 +162,7 @@ user_model = auth_ns.model(
         "date_naissance": fields.String(),
         "subscription_plan": fields.String(),
         "payment_status": fields.String(),
+        "role": fields.String(),
     }
 )
 

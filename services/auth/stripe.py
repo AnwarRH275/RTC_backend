@@ -64,7 +64,7 @@ PLANS = {
         "name": "Pack Écrit Pro",
         "price": 4999,  # 49.99 CAD
         "usages": 30,
-        "product_id": "prod_SMePWWnxhhQXZJ",
+        "product_id": "prod_SMeQ8tIJeu8sHA",
     },
 }
 
