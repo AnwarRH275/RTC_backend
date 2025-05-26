@@ -114,6 +114,23 @@ class TCFExamResource(Resource):
         exams = TCFExam.query.all()
         return exams
 
+@exam_ns.route("/exams/user")
+class TCFExamUserResource(Resource):
+    
+    @exam_ns.marshal_list_with(exam_model)
+    @jwt_required()
+    def get(self):
+        '''Récupérer tous les examens passés de l'utilisateur connecté'''
+        current_user_identity = get_jwt_identity()
+        user = User.query.filter_by(username=current_user_identity).first()
+        
+        if not user:
+            return {'message': 'Utilisateur non trouvé'}, 404
+            
+        exams = TCFExam.query.filter_by(id_user=user.id).all()
+        
+        return exams
+
     
     @exam_ns.marshal_with(exam_model)
     @exam_ns.expect(exam_input_model)
