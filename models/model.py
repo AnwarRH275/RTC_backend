@@ -49,6 +49,7 @@ class User(db.Model):
     payment_status = db.Column(db.String(), default="pending", nullable=True)  # pending, paid
     payment_id = db.Column(db.String(), nullable=True)  # ID de la transaction Stripe
     role = db.Column(db.String(), default="client", nullable=False)
+    sold = db.Column(db.Float(), default=0.0, nullable=True)
 
     def to_dict(self):
         return {
@@ -58,6 +59,7 @@ class User(db.Model):
             'tel': self.tel,
             'subscription_plan': self.subscription_plan,
             'payment_status': self.payment_status,
+            'sold': self.sold
         }
 
     def __repr__(self) -> str:
@@ -75,6 +77,10 @@ class User(db.Model):
         self.subscription_plan = plan
         self.payment_status = payment_status
         self.payment_id = payment_id
+        db.session.commit()
+
+    def update_sold(self, new_sold_value):
+        self.sold = new_sold_value
         db.session.commit()
 
     def save(self):
