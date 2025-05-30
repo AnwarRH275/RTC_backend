@@ -1,10 +1,19 @@
-from flask import request, jsonify
+from flask import request
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import jwt_required
-from models.tcf_model import TCFSubject, TCFTask
+from models.tcf_model import TCFSubject, TCFTask, TCFDocument
 from models.exts import db
 
 tcf_ns = Namespace('tcf', description='Gestion des sujets TCF')
+
+# Modèle pour les documents
+document_model = tcf_ns.model(
+    "TCFDocument",
+    {
+        "id": fields.Integer(),
+        "content": fields.String(required=True)
+    }
+)
 
 # Modèle pour les tâches
 task_model = tcf_ns.model(
@@ -12,11 +21,11 @@ task_model = tcf_ns.model(
     {
         "id": fields.Integer(),
         "title": fields.String(required=True),
-        "description": fields.String(),
-        "audio_duration": fields.Integer(),
-        "word_count": fields.Integer(),
+        "structure": fields.String(),
         "instructions": fields.String(),
-        "documents_de_reference": fields.String()
+        "min_word_count": fields.Integer(),
+        "max_word_count": fields.Integer(),
+        "documents": fields.List(fields.Nested(document_model))
     }
 )
 
@@ -27,12 +36,11 @@ tcf_subject_model = tcf_ns.model(
         "id": fields.Integer(),
         "name": fields.String(required=True),
         "date": fields.String(required=True),
-        "subscription_plan": fields.String(required=True),
         "status": fields.String(required=True),
         "duration": fields.Integer(required=True),
         "combination": fields.String(required=False),
-        "blog": fields.String(required=False),
         "subject_type": fields.String(required=True),
+        "description": fields.String(required=False),
         "tasks": fields.List(fields.Nested(task_model))
     }
 )
@@ -43,12 +51,11 @@ tcf_subject_input_model = tcf_ns.model(
     {
         "name": fields.String(required=True),
         "date": fields.String(required=True),
-        "subscription_plan": fields.String(required=True),
         "status": fields.String(required=True),
         "duration": fields.Integer(required=True),
         "combination": fields.String(required=False),
-        "blog": fields.String(required=False),
         "subject_type": fields.String(required=True),
+        "description": fields.String(required=False),
         "tasks": fields.List(fields.Nested(task_model))
     }
 )
@@ -77,12 +84,11 @@ class TCFSubjectResource(Resource):
         new_subject = TCFSubject(
             name=data.get('name'),
             date=data.get('date'),
-            subscription_plan=data.get('subscription_plan'),
             status=data.get('status'),
             duration=data.get('duration'),
             combination=data.get('combination'),
-            blog=data.get('blog'),
-            subject_type=data.get('subject_type')
+            subject_type=data.get('subject_type'),
+            description=data.get('description')
         )
         new_subject.save()
         
@@ -91,14 +97,22 @@ class TCFSubjectResource(Resource):
             for task_data in data['tasks']:
                 new_task = TCFTask(
                     title=task_data.get('title'),
-                    description=task_data.get('description'),
-                    word_count=task_data.get('word_count'),
-                    audio_duration=task_data.get('audio_duration'),
+                    structure=task_data.get('structure'),
                     instructions=task_data.get('instructions'),
-                    documents_de_reference=task_data.get('documents_de_reference'),
+                    min_word_count=task_data.get('min_word_count'),
+                    max_word_count=task_data.get('max_word_count'),
                     subject_id=new_subject.id
                 )
                 new_task.save()
+                
+                # Ajouter les documents si présents
+                if 'documents' in task_data and task_data['documents']:
+                    for doc_data in task_data['documents']:
+                        new_document = TCFDocument(
+                            content=doc_data.get('content'),
+                            task_id=new_task.id
+                        )
+                        new_document.save()
         
         return new_subject, 201
 
@@ -133,16 +147,25 @@ class TCFSubjectDetailResource(Resource):
 
             # Ajouter les nouvelles tâches
             for task_data in tasks_data:
+                print(task_data)
                 new_task = TCFTask(
                     title=task_data.get('title'),
-                    description=task_data.get('description'),
-                    word_count=task_data.get('word_count'),
-                    audio_duration=task_data.get('audio_duration'),
+                    structure=task_data.get('structure'),
                     instructions=task_data.get('instructions'),
-                    documents_de_reference=task_data.get('documents_de_reference'),
+                    min_word_count=task_data.get('min_word_count'),
+                    max_word_count=task_data.get('max_word_count'),
                     subject_id=subject.id
                 )
                 new_task.save()
+                
+                # Ajouter les documents si présents
+                if 'documents' in task_data and task_data['documents']:
+                    for doc_data in task_data['documents']:
+                        new_document = TCFDocument(
+                            content=doc_data.get('content'),
+                            task_id=new_task.id
+                        )
+                        new_document.save()
 
         return subject
 
@@ -161,36 +184,48 @@ def create_test_subjects():
         subject1 = TCFSubject(
             name="Environnement et développement durable",
             date="2023-10-15",
-            subscription_plan="Intermédiaire",
             status="Actif",
             duration=60,
             combination="N5",
-            blog="blog-env",
-            subject_type="Écrit"
+            subject_type="Écrit",
+            description="Sujet sur l'environnement et le développement durable"
         )
         subject1.save()
         
         # Tâches pour le sujet 1
         task1 = TCFTask(
             title="Rédaction d'un essai",
-            description="Rédigez un essai sur l'importance du développement durable",
-            word_count=300,
+            structure="Introduction, développement, conclusion",
+            instructions="Rédigez un essai sur l'importance du développement durable",
+            min_word_count=250,
+            max_word_count=350,
             subject_id=subject1.id
         )
         task1.save()
         
+        # Document pour la tâche 1
+        doc1 = TCFDocument(
+            content="Document de référence sur le développement durable et ses enjeux actuels.",
+            task_id=task1.id
+        )
+        doc1.save()
+        
         task2 = TCFTask(
             title="Analyse de document",
-            description="Analysez le document fourni sur les énergies renouvelables",
-            word_count=200,
+            structure="Analyse structurée avec arguments",
+            instructions="Analysez le document fourni sur les énergies renouvelables",
+            min_word_count=150,
+            max_word_count=250,
             subject_id=subject1.id
         )
         task2.save()
         
         task3 = TCFTask(
             title="Questions à choix multiples",
-            description="Répondez aux questions sur le texte",
-            word_count=100,
+            structure="Réponses courtes et précises",
+            instructions="Répondez aux questions sur le texte",
+            min_word_count=50,
+            max_word_count=150,
             subject_id=subject1.id
         )
         task3.save()
@@ -199,36 +234,41 @@ def create_test_subjects():
         subject2 = TCFSubject(
             name="Technologie et société",
             date="2023-11-20",
-            subscription_plan="Avancé",
             status="Actif",
             duration=60,
             combination="N6",
-            blog="blog-tech",
-            subject_type="Écrit"
+            subject_type="Écrit",
+            description="Sujet sur l'impact des technologies sur la société"
         )
         subject2.save()
         
         # Tâches pour le sujet 2
         task4 = TCFTask(
             title="Dissertation",
-            description="Rédigez une dissertation sur l'impact des technologies sur la société",
-            word_count=350,
+            structure="Introduction, développement en 3 parties, conclusion",
+            instructions="Rédigez une dissertation sur l'impact des technologies sur la société",
+            min_word_count=300,
+            max_word_count=400,
             subject_id=subject2.id
         )
         task4.save()
         
         task5 = TCFTask(
             title="Résumé de texte",
-            description="Résumez le texte sur l'intelligence artificielle",
-            word_count=150,
+            structure="Résumé structuré et synthétique",
+            instructions="Résumez le texte sur l'intelligence artificielle",
+            min_word_count=100,
+            max_word_count=200,
             subject_id=subject2.id
         )
         task5.save()
         
         task6 = TCFTask(
             title="Exercice de vocabulaire",
-            description="Complétez les phrases avec le vocabulaire technique approprié",
-            word_count=100,
+            structure="Réponses précises et justifiées",
+            instructions="Complétez les phrases avec le vocabulaire technique approprié",
+            min_word_count=50,
+            max_word_count=150,
             subject_id=subject2.id
         )
         task6.save()
@@ -237,31 +277,53 @@ def create_test_subjects():
         subject3 = TCFSubject(
             name="Culture et traditions",
             date="2023-12-05",
-            subscription_plan="Débutant",
             status="Inactif",
             duration=45,
             combination="O5",
-            blog="blog-culture",
-            subject_type="Écrit"
+            subject_type="Écrit",
+            description="Sujet sur les cultures et traditions"
         )
         subject3.save()
         
         # Tâches pour le sujet 3
         task7 = TCFTask(
             title="Expression écrite",
-            description="Décrivez une tradition culturelle de votre pays",
-            word_count=200,
+            structure="Description détaillée et personnelle",
+            instructions="Décrivez une tradition culturelle de votre pays",
+            min_word_count=150,
+            max_word_count=250,
             subject_id=subject3.id
         )
         task7.save()
         
         task8 = TCFTask(
             title="Compréhension de texte",
-            description="Lisez le texte sur les fêtes traditionnelles et répondez aux questions",
-            word_count=150,
+            structure="Questions-réponses structurées",
+            instructions="Lisez le texte sur les fêtes traditionnelles et répondez aux questions",
+            min_word_count=100,
+            max_word_count=200,
             subject_id=subject3.id
         )
         task8.save()
+        
+        # Ajouter des documents d'exemple pour certaines tâches
+        doc1 = TCFDocument(
+            content="Texte de référence sur les technologies émergentes et leur impact sur la société moderne.",
+            task_id=task4.id
+        )
+        doc1.save()
+        
+        doc2 = TCFDocument(
+            content="Article sur l'intelligence artificielle et ses applications dans différents domaines.",
+            task_id=task5.id
+        )
+        doc2.save()
+        
+        doc3 = TCFDocument(
+            content="Texte descriptif sur les fêtes traditionnelles du monde entier.",
+            task_id=task8.id
+        )
+        doc3.save()
         
         return True
     

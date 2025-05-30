@@ -47,19 +47,8 @@ api = Api(app, doc='/docs', authorizations=authorizations, security=None)
 
 api.add_namespace(auth_ns)
 api.add_namespace(stripe_ns)
-#api.add_namespace(recipie_ns)
 api.add_namespace(tcf_ns)
 api.add_namespace(exam_ns)
-# api.add_namespace(category_ns)
-# api.add_namespace(match_ns)
-# api.add_namespace(mesgrid_ns)
-# api.add_namespace(scores_ns)
-# api.add_namespace(coupons_ns)
-# api.add_namespace(erreur_ns)
-# api.add_namespace(affiliation_ns)
-# api.add_namespace(uploadImage_ns)
-# api.add_namespace(gagnant_ns)
-# api.add_namespace(tokenNotification_ns)
 
 
 @app.before_first_request

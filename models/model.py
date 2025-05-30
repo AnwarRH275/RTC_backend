@@ -50,16 +50,22 @@ class User(db.Model):
     payment_id = db.Column(db.String(), nullable=True)  # ID de la transaction Stripe
     role = db.Column(db.String(), default="client", nullable=False)
     sold = db.Column(db.Float(), default=0.0, nullable=True)
+    total_sold = db.Column(db.Float(), default=0.0, nullable=True)
 
     def to_dict(self):
         return {
             'email': self.email,
+            'role': self.role,
+            'id': self.id,
+            'date_create': self.date_create,
+            'prenom': self.prenom,
             'username': self.username,
             'nom': self.nom,
             'tel': self.tel,
             'subscription_plan': self.subscription_plan,
             'payment_status': self.payment_status,
-            'sold': self.sold
+            'sold': self.sold,
+            'total_sold': self.total_sold
         }
 
     def __repr__(self) -> str:
@@ -81,6 +87,10 @@ class User(db.Model):
 
     def update_sold(self, new_sold_value):
         self.sold = new_sold_value
+        db.session.commit()
+
+    def update_total_sold(self, new_total_sold_value):
+        self.total_sold = new_total_sold_value
         db.session.commit()
 
     def save(self):

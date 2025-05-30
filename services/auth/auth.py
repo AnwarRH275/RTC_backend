@@ -25,7 +25,8 @@ signup_model = auth_ns.model(
         "date_naissance": fields.String(),
         "plan": fields.String(),
         "role": fields.String(),
-        "sold": fields.Float(default=0.0)
+        "sold": fields.Float(default=0.0),
+        "total_sold": fields.Float(default=0.0)
 
     }
 )
@@ -62,6 +63,7 @@ class SignUp(Resource):
         username_to_update.subscription_plan = data.get('plan', username_to_update.subscription_plan)
         username_to_update.role = data.get('role', username_to_update.role)
         username_to_update.sold = data.get('sold', username_to_update.sold)
+        username_to_update.total_sold = data.get('total_sold', username_to_update.total_sold)
         
         # Update password only if provided
         if data.get('password'):
@@ -83,6 +85,7 @@ class SignUp(Resource):
             return jsonify({"message": "User exist"})
         
         sold = 0.0
+        
         if data.get('plan') == "standard":
             sold = 5.0
         elif data.get('plan') == "performance":
@@ -102,7 +105,8 @@ class SignUp(Resource):
             date_naissance=data.get('date_naissance'),
             subscription_plan=data.get('plan'),
             payment_status="paid",  # Considéré comme payé après redirection de Stripe
-            sold=sold
+            sold=sold,
+            total_sold=sold
         )
 
         new_user.save()
@@ -123,20 +127,22 @@ class Login(Resource):
         # Si l'utilisateur n'est pas trouvé par nom d'utilisateur, essayer par email
         if user is None:
             user = User.query.filter_by(email=username_or_email).first()
+            print(user)
             
         if user is None:
-            return jsonify({"message": "Utilisateur non trouvé. Vérifiez votre nom d'utilisateur ou email."})
+            return jsonify({"message": "Utilisateur non trouvé. Vérifiez votre nom d'utilisateur ou email."}), 404
             
         if check_password_hash(user.password, password):
             access_token = create_access_token(identity=user.username)
             refresh_token = create_refresh_token(
                 identity=user.username)
             return jsonify({
-                'acces_token': access_token,
-                'refresh_token': refresh_token
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'user_info': user.to_dict()
             })
         else:
-            return jsonify({"message": "password invalid"})
+            return jsonify({"message": "Mot de passe invalide"}), 401
 
 
 @auth_ns.route('/counter')
@@ -174,7 +180,8 @@ user_model = auth_ns.model(
         "subscription_plan": fields.String(),
         "payment_status": fields.String(),
         "role": fields.String(),
-         "sold": fields.Float(default=0.0)
+         "sold": fields.Float(default=0.0),
+        "total_sold": fields.Float(default=0.0)
     }
 )
 
@@ -204,6 +211,15 @@ class RefreshResource(Resource):
 
         return make_response(jsonify({"access_token": new_access_token}), 200)
 
+# model (serializer) for updating total sold
+update_total_sold_model = auth_ns.model(
+    "UpdateTotalSold",
+    {
+        "username": fields.String(required=True),
+        "new_total_sold_value": fields.Float(required=True)
+    }
+)
+
 @auth_ns.route('/update-sold')
 class UpdateSoldResource(Resource):
     @auth_ns.expect(update_sold_model)
@@ -220,9 +236,30 @@ class UpdateSoldResource(Resource):
 
         try:
             user.update_sold(new_sold_value)
-            return jsonify({"message": "Solde utilisateur mis à jour avec succès", "sold": user.sold}), 200
+            return make_response(jsonify({"message": "Solde utilisateur mis à jour avec succès", "sold": user.sold}), 200)
         except Exception as e:
-            return jsonify({"message": f"Erreur lors de la mise à jour du solde : {str(e)}"}), 500
+            print(e)
+            return make_response(jsonify({"message": f"Erreur lors de la mise à jour du solde : {str(e)}"}), 500)
+
+@auth_ns.route('/update-total-sold')
+class UpdateTotalSoldResource(Resource):
+    @auth_ns.expect(update_total_sold_model)
+    @jwt_required()
+    def put(self):
+        data = request.get_json()
+        username = data.get('username')
+        new_total_sold_value = data.get('new_total_sold_value')
+
+        user = User.query.filter_by(username=username).first()
+
+        if not user:
+            return jsonify({"message": "Utilisateur non trouvé"}), 404
+
+        try:
+            user.update_total_sold(new_total_sold_value)
+            return jsonify({"message": "Solde total utilisateur mis à jour avec succès", "total_sold": user.total_sold}), 200
+        except Exception as e:
+            return jsonify({"message": f"Erreur lors de la mise à jour du solde total : {str(e)}"}), 500
 
 @auth_ns.route('/MyPlan')
 class MyPlanResource(Resource):
@@ -232,5 +269,17 @@ class MyPlanResource(Resource):
         user = User.query.filter_by(username=current_user_identity).first()
         if user:
             return jsonify({'subscription_plan': user.subscription_plan})
+        else:
+            return jsonify({'message': 'User not found'}), 404
+
+@auth_ns.route('/me')
+class CurrentUserResource(Resource):
+    @jwt_required()
+    def get(self):
+        '''Récupérer les informations de l'utilisateur connecté'''
+        current_user_identity = get_jwt_identity()
+        user = User.query.filter_by(username=current_user_identity).first()
+        if user:
+            return jsonify(user.to_dict())
         else:
             return jsonify({'message': 'User not found'}), 404
