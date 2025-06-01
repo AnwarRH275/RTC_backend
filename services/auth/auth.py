@@ -223,7 +223,6 @@ update_total_sold_model = auth_ns.model(
 @auth_ns.route('/update-sold')
 class UpdateSoldResource(Resource):
     @auth_ns.expect(update_sold_model)
-    @jwt_required()
     def put(self):
         data = request.get_json()
         username = data.get('username')
@@ -238,13 +237,12 @@ class UpdateSoldResource(Resource):
             user.update_sold(new_sold_value)
             return make_response(jsonify({"message": "Solde utilisateur mis à jour avec succès", "sold": user.sold}), 200)
         except Exception as e:
-            print(e)
+            print(f"Erreur lors de la mise à jour du solde : {str(e)}")
             return make_response(jsonify({"message": f"Erreur lors de la mise à jour du solde : {str(e)}"}), 500)
 
 @auth_ns.route('/update-total-sold')
 class UpdateTotalSoldResource(Resource):
     @auth_ns.expect(update_total_sold_model)
-    @jwt_required()
     def put(self):
         data = request.get_json()
         username = data.get('username')
@@ -253,13 +251,14 @@ class UpdateTotalSoldResource(Resource):
         user = User.query.filter_by(username=username).first()
 
         if not user:
-            return jsonify({"message": "Utilisateur non trouvé"}), 404
+            return make_response(jsonify({"message": "Utilisateur non trouvé"}), 404)
 
         try:
             user.update_total_sold(new_total_sold_value)
-            return jsonify({"message": "Solde total utilisateur mis à jour avec succès", "total_sold": user.total_sold}), 200
+            return make_response(jsonify({"message": "Solde total utilisateur mis à jour avec succès", "total_sold": user.total_sold}), 200)
         except Exception as e:
-            return jsonify({"message": f"Erreur lors de la mise à jour du solde total : {str(e)}"}), 500
+            print(f"Erreur lors de la mise à jour du solde total : {str(e)}")
+            return make_response(jsonify({"message": f"Erreur lors de la mise à jour du solde total : {str(e)}"}), 500)
 
 @auth_ns.route('/MyPlan')
 class MyPlanResource(Resource):
