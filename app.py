@@ -10,6 +10,7 @@ from services.auth.stripe import stripe_ns
 from services.crud.manage import recipie_ns
 from services.crud.tcf_admin import tcf_ns, create_test_subjects
 from services.exam.exam import exam_ns
+from services.exam.attempt import attempt_ns
 
 
 app = Flask(__name__)
@@ -49,6 +50,7 @@ api.add_namespace(auth_ns)
 api.add_namespace(stripe_ns)
 api.add_namespace(tcf_ns)
 api.add_namespace(exam_ns)
+api.add_namespace(attempt_ns)
 
 
 @app.before_first_request
