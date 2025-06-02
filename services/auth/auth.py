@@ -84,14 +84,17 @@ class SignUp(Resource):
         if username_find is not None:
             return jsonify({"message": "User exist"})
         
-        sold = 0.0
+        # Récupérer dynamiquement les usages du plan depuis la base de données
+        from models.subscription_pack_model import SubscriptionPack
         
-        if data.get('plan') == "standard":
-            sold = 5.0
-        elif data.get('plan') == "performance":
-            sold = 15.0
-        elif data.get('plan') == "pro":
-            sold = 30.0
+        plan_name = data.get('plan')
+        subscription_pack = SubscriptionPack.query.filter_by(pack_id=plan_name, is_active=True).first()
+        
+        if subscription_pack:
+            sold = float(subscription_pack.usages)
+        else:
+            # Valeur par défaut si le plan n'est pas trouvé
+            sold = 0.0
 
         # Créer un nouvel utilisateur
         new_user = User(

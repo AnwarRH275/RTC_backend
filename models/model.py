@@ -83,6 +83,26 @@ class User(db.Model):
         self.subscription_plan = plan
         self.payment_status = payment_status
         self.payment_id = payment_id
+        
+        # Mettre à jour automatiquement sold et total_sold selon le nouveau plan
+        from models.subscription_pack_model import SubscriptionPack
+        pack = SubscriptionPack.query.filter_by(pack_id=plan, isActive=True).first()
+        if pack:
+            # Calculer le ratio d'usage actuel pour préserver le progrès
+            current_ratio = 0
+            if self.total_sold and self.total_sold > 0:
+                current_ratio = self.sold / self.total_sold
+            
+            # Mettre à jour total_sold avec les nouveaux usages du pack
+            self.total_sold = float(pack.usages)
+            
+            # Mettre à jour sold en préservant le ratio d'usage
+            self.sold = self.total_sold * current_ratio
+            
+            # S'assurer que sold ne dépasse pas total_sold
+            if self.sold > self.total_sold:
+                self.sold = self.total_sold
+        
         db.session.commit()
 
     def update_sold(self, new_sold_value):
