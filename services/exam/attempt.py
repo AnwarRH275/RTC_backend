@@ -109,12 +109,12 @@ class TCFAttemptCheckResource(Resource):
         # Récupérer ou créer la tentative
         attempt = TCFAttempt.get_or_create_attempt(user.id, subject_id)
         
-        can_attempt = attempt.attempt_count < 2
-        remaining_attempts = max(0, 2 - attempt.attempt_count)
+        can_attempt = attempt.attempt_count < 1
+        remaining_attempts = max(0, 1 - attempt.attempt_count)
         
         return {
             'can_attempt': can_attempt,
             'current_attempts': attempt.attempt_count,
             'remaining_attempts': remaining_attempts,
-            'max_attempts': 2
+            'max_attempts': 1
         }, 200

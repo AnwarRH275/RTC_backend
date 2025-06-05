@@ -155,16 +155,44 @@ class counter(Resource):
         return jsonify({'total_count': total_count})
 
 
-@auth_ns.route('/delete/<string:username>', methods=['DELETE'])
-class deleteUsers(Resource):
+@auth_ns.route('/delete/<username>')
+class DeleteUser(Resource):
     def delete(self, username):
         user = User.query.filter_by(username=username).first()
         if user:
             db.session.delete(user)
             db.session.commit()
-            return jsonify({'message': f'User {username} deleted.'})
+            return {'message': 'User deleted successfully'}, 200
         else:
-            return jsonify({'message': f'User {username} not found.'})
+            return {'message': 'User not found'}, 404
+
+@auth_ns.route('/user-info')
+class UserInfo(Resource):
+    @jwt_required()
+    def get(self):
+        """Récupérer les informations de l'utilisateur connecté"""
+        try:
+            current_user_id = get_jwt_identity()
+            user = User.query.get(current_user_id)
+            
+            if not user:
+                return {'message': 'Utilisateur non trouvé'}, 404
+            
+            return {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'nom': user.nom,
+                'prenom': user.prenom,
+                'subscription_plan': user.subscription_plan,
+                'sold': user.sold,
+                'total_sold': user.total_sold,
+                'payment_status': user.payment_status,
+                'role': user.role
+            }, 200
+            
+        except Exception as e:
+            return {'message': f'Erreur lors de la récupération des informations: {str(e)}'}, 500
 
 
 

@@ -141,7 +141,7 @@ class StripeCheckoutSession(Resource):
 class StripeVerifyPayment(Resource):
     @stripe_ns.expect(payment_verify_model)
     def post(self):
-        """Vérifier le statut d'un paiement Stripe"""
+        """Vérifier le statut d'un paiement Stripe et mettre à jour l'utilisateur si nécessaire"""
         # Initialiser Stripe avec la bonne clé API
         init_stripe()
         
@@ -154,10 +154,31 @@ class StripeVerifyPayment(Resource):
             
             # Vérifier si le paiement a été effectué
             if checkout_session.payment_status == 'paid':
-                return make_response(jsonify({
-                    "status": "success",
-                    "message": "Paiement réussi"
-                }), 200)
+                # Récupérer les métadonnées pour mettre à jour l'utilisateur
+                user_id = checkout_session.metadata.get('user_id')
+                plan_name = checkout_session.metadata.get('plan_name')
+                
+                if user_id and plan_name:
+                    # Mettre à jour le plan de l'utilisateur
+                    success = update_user_subscription(user_id, plan_name)
+                    if success:
+                        return make_response(jsonify({
+                            "status": "success",
+                            "message": "Paiement réussi et plan mis à jour",
+                            "user_updated": True
+                        }), 200)
+                    else:
+                        return make_response(jsonify({
+                            "status": "success",
+                            "message": "Paiement réussi mais erreur lors de la mise à jour du plan",
+                            "user_updated": False
+                        }), 200)
+                else:
+                    return make_response(jsonify({
+                        "status": "success",
+                        "message": "Paiement réussi",
+                        "user_updated": False
+                    }), 200)
             else:
                 return make_response(jsonify({
                     "status": "pending",
@@ -165,7 +186,7 @@ class StripeVerifyPayment(Resource):
                 }), 200)
                 
         except Exception as e:
-            current_app.logger.error("Erreur lors de la création de la session de paiement Stripe:", exc_info=True)
+            current_app.logger.error("Erreur lors de la vérification du paiement Stripe:", exc_info=True)
             return make_response(jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500)
 
 # Webhook pour recevoir les événements Stripe
@@ -188,12 +209,81 @@ class StripeWebhook(Resource):
             if event['type'] == 'checkout.session.completed':
                 session = event['data']['object']
                 
-                # Mettre à jour le statut de l'utilisateur dans la base de données
-                # Ici, vous pouvez ajouter votre logique pour mettre à jour l'utilisateur
+                # Récupérer les métadonnées de la session
+                metadata = session.get('metadata', {})
+                user_id = metadata.get('user_id')
+                plan_name = metadata.get('plan_name')
+                customer_email = session.get('customer_email')
+                
+                current_app.logger.info(
+                    f"Webhook reçu - Session: {session.get('id')}, "
+                    f"User ID: {user_id}, Plan: {plan_name}, Email: {customer_email}"
+                )
+                
+                if user_id and plan_name:
+                    # Mettre à jour le plan et le solde de l'utilisateur
+                    success = update_user_subscription(user_id, plan_name)
+                    if success:
+                        current_app.logger.info(f"Mise à jour réussie pour l'utilisateur {user_id}")
+                    else:
+                        current_app.logger.error(f"Échec de la mise à jour pour l'utilisateur {user_id}")
+                else:
+                    current_app.logger.warning(
+                        f"Métadonnées manquantes - User ID: {user_id}, Plan: {plan_name}"
+                    )
                 
                 return make_response(jsonify({"status": "success"}), 200)
                 
         except Exception as e:
+            current_app.logger.error(f"Erreur webhook Stripe: {str(e)}")
             return make_response(jsonify({"error": str(e)}), 400)
         
         return make_response(jsonify({"status": "success"}), 200)
+
+
+def update_user_subscription(user_id, plan_name):
+    """Met à jour le plan d'abonnement et le solde de l'utilisateur après un paiement réussi"""
+    try:
+        # Récupérer l'utilisateur
+        user = User.query.get(user_id)
+        if not user:
+            current_app.logger.error(f"Utilisateur avec l'ID {user_id} non trouvé")
+            return False
+        
+        # Récupérer les informations du plan depuis la base de données
+        from models.subscription_pack_model import SubscriptionPack
+        subscription_pack = SubscriptionPack.query.filter_by(pack_id=plan_name, is_active=True).first()
+        
+        if subscription_pack:
+            # Sauvegarder l'ancien plan pour le log
+            old_plan = user.subscription_plan
+            old_sold = user.sold
+            old_total_sold = user.total_sold
+            
+            # Mettre à jour le plan d'abonnement
+            user.subscription_plan = plan_name
+            user.payment_status = "paid"
+            
+            # Ajouter les nouveaux usages au solde existant
+            new_usages = float(subscription_pack.usages)
+            user.sold += new_usages
+            user.total_sold += new_usages
+            
+            # Sauvegarder les changements
+            db.session.commit()
+            
+            current_app.logger.info(
+                f"Plan mis à jour pour l'utilisateur {user_id}: "
+                f"{old_plan} -> {plan_name}, "
+                f"Sold: {old_sold} -> {user.sold} (+{new_usages}), "
+                f"Total: {old_total_sold} -> {user.total_sold}"
+            )
+            return True
+        else:
+            current_app.logger.error(f"Plan {plan_name} non trouvé dans la base de données")
+            return False
+            
+    except Exception as e:
+        current_app.logger.error(f"Erreur lors de la mise à jour de l'abonnement: {str(e)}")
+        db.session.rollback()
+        return False
