@@ -23,6 +23,7 @@ class SubscriptionPack(db.Model):
     button_gradient_end = db.Column(db.String(7), nullable=False)    # Couleur de fin du gradient bouton
     button_hover_gradient_start = db.Column(db.String(7), nullable=False)  # Couleur de début du gradient bouton hover
     button_hover_gradient_end = db.Column(db.String(7), nullable=False)    # Couleur de fin du gradient bouton hover
+    button_text = db.Column(db.String(50), nullable=False, default='Payer maintenant')  # Texte du bouton
     
     # Métadonnées
     is_active = db.Column(db.Boolean(), default=True)
@@ -55,6 +56,7 @@ class SubscriptionPack(db.Model):
                 'start': self.button_hover_gradient_start,
                 'end': self.button_hover_gradient_end
             },
+            'buttonText': self.button_text,
             'isActive': self.is_active,
             'features': [feature.to_dict() for feature in self.features],
             'createdAt': self.created_at.isoformat() if self.created_at else None,

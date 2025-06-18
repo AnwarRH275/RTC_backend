@@ -1,6 +1,7 @@
 from flask import Flask
 from flask_restx import Api, Resource
-from config import DevConfig
+from config import DevConfig, ProdConfig
+import os
 from models.exts import db
 from models.subscription_pack_model import SubscriptionPack, PackFeature
 from flask_jwt_extended import JWTManager
@@ -14,15 +15,22 @@ from services.crud.tcf_admin import tcf_ns, create_test_subjects
 from services.exam.exam import exam_ns
 from services.exam.attempt import attempt_ns
 from services.crud.subscription_pack_admin import pack_ns, create_default_packs
+from services.proxy.correction_proxy import proxy_ns
+from services.proxy.translation_proxy import proxy_translation_ns
+from services.proxy.note_moyenne_proxy import proxy_note_moyenne_ns
 
 
 app = Flask(__name__)
 
-
 app.config.from_object(DevConfig)
 
-# Configuration CORS pour permettre les requêtes cross-origin
-CORS(app, resources={r"/*": {"origins": "*", "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"], "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]}}, supports_credentials=False)
+# Configuration CORS pour permettre toutes les requêtes cross-origin
+CORS(app, resources={r"/*": {
+    "origins": "*",
+    "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+    "supports_credentials": False
+}})
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
 jwt = JWTManager(app)
 
@@ -76,6 +84,9 @@ api.add_namespace(tcf_ns)
 api.add_namespace(exam_ns)
 api.add_namespace(attempt_ns)
 api.add_namespace(pack_ns)
+api.add_namespace(proxy_ns)
+api.add_namespace(proxy_translation_ns)
+api.add_namespace(proxy_note_moyenne_ns)
 
 
 @app.before_first_request
@@ -86,4 +97,7 @@ def initialize_data():
     create_default_packs()
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    # Activer le threading pour permettre le traitement concurrent des requêtes
+    app.run(debug=True, port=5001, threaded=True)
+else:
+    application = app

@@ -25,6 +25,7 @@ task_model = tcf_ns.model(
         "instructions": fields.String(),
         "min_word_count": fields.Integer(),
         "max_word_count": fields.Integer(),
+        "duration": fields.Integer(),
         "documents": fields.List(fields.Nested(document_model))
     }
 )
@@ -101,6 +102,7 @@ class TCFSubjectResource(Resource):
                     instructions=task_data.get('instructions'),
                     min_word_count=task_data.get('min_word_count'),
                     max_word_count=task_data.get('max_word_count'),
+                    duration=task_data.get('duration'),
                     subject_id=new_subject.id
                 )
                 new_task.save()
@@ -139,39 +141,88 @@ class TCFSubjectDetailResource(Resource):
         # Mettre à jour le sujet (excluding tasks)
         subject.update(data)
 
-        # Supprimer les tâches existantes et ajouter les nouvelles
+        # Mettre à jour les tâches de manière intelligente
         if tasks_data is not None:
-            # Supprimer les tâches existantes
-            for task in subject.tasks:
-                task.delete()
-
-            # Ajouter les nouvelles tâches
+            # Créer un dictionnaire des tâches existantes par ID
+            existing_tasks = {task.id: task for task in subject.tasks}
+            updated_task_ids = set()
+            
+            # Traiter chaque tâche dans les données reçues
             for task_data in tasks_data:
-                print(task_data)
-                new_task = TCFTask(
-                    title=task_data.get('title'),
-                    structure=task_data.get('structure'),
-                    instructions=task_data.get('instructions'),
-                    min_word_count=task_data.get('min_word_count'),
-                    max_word_count=task_data.get('max_word_count'),
-                    subject_id=subject.id
-                )
-                new_task.save()
+                task_id = task_data.get('id')
                 
-                # Ajouter les documents si présents
-                if 'documents' in task_data and task_data['documents']:
-                    for doc_data in task_data['documents']:
-                        new_document = TCFDocument(
-                            content=doc_data.get('content'),
-                            task_id=new_task.id
-                        )
-                        new_document.save()
+                # Ignorer les IDs temporaires (qui commencent par 'temp_')
+                if task_id and isinstance(task_id, str) and task_id.startswith('temp_'):
+                    task_id = None
+                
+                if task_id and task_id in existing_tasks:
+                    # Mettre à jour la tâche existante
+                    existing_task = existing_tasks[task_id]
+                    existing_task.update({
+                        'title': task_data.get('title'),
+                        'structure': task_data.get('structure'),
+                        'instructions': task_data.get('instructions'),
+                        'min_word_count': task_data.get('min_word_count'),
+                        'max_word_count': task_data.get('max_word_count'),
+                        'duration': task_data.get('duration')
+                    })
+                    updated_task_ids.add(task_id)
+                    
+                    # Mettre à jour les documents de cette tâche
+                    if 'documents' in task_data:
+                        # Supprimer les anciens documents
+                        for doc in existing_task.documents:
+                            doc.delete()
+                        # Ajouter les nouveaux documents
+                        for doc_data in task_data['documents']:
+                            new_document = TCFDocument(
+                                content=doc_data.get('content'),
+                                task_id=existing_task.id
+                            )
+                            new_document.save()
+                else:
+                    # Créer une nouvelle tâche
+                    new_task = TCFTask(
+                        title=task_data.get('title'),
+                        structure=task_data.get('structure'),
+                        instructions=task_data.get('instructions'),
+                        min_word_count=task_data.get('min_word_count'),
+                        max_word_count=task_data.get('max_word_count'),
+                        duration=task_data.get('duration'),
+                        subject_id=subject.id
+                    )
+                    new_task.save()
+                    
+                    # Ajouter les documents si présents
+                    if 'documents' in task_data and task_data['documents']:
+                        for doc_data in task_data['documents']:
+                            new_document = TCFDocument(
+                                content=doc_data.get('content'),
+                                task_id=new_task.id
+                            )
+                            new_document.save()
+            
+            # Supprimer les tâches qui ne sont plus dans les données reçues
+            for task_id, task in existing_tasks.items():
+                if task_id not in updated_task_ids:
+                    task.delete()
 
         return subject
 
     def delete(self, id):
         '''Supprimer un sujet TCF'''
+        from models.tcf_attempt_model import TCFAttempt
+        from models.tcf_exam_model import TCFExam
+        
         subject = TCFSubject.query.get_or_404(id)
+        
+        # Supprimer d'abord tous les examens liés à ce sujet
+        TCFExam.query.filter_by(id_subject=id).delete()
+        
+        # Supprimer toutes les tentatives liées à ce sujet
+        TCFAttempt.query.filter_by(id_subject=id).delete()
+        
+        # Maintenant supprimer le sujet
         subject.delete()
         return {"message": f"Sujet TCF {id} supprimé"}, 200
 

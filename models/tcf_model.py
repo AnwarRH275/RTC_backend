@@ -25,6 +25,10 @@ class TCFSubject(db.Model):
         db.session.commit()
 
     def delete(self):
+        # Supprimer d'abord tous les examens liés à cette tâche
+        from .tcf_exam_model import TCFExam
+        TCFExam.query.filter_by(id_task=self.id).delete()
+        
         db.session.delete(self)
         db.session.commit()
 
@@ -54,6 +58,7 @@ class TCFTask(db.Model):
     instructions = db.Column(db.Text(), nullable=True)  # Instructions spécifiques
     min_word_count = db.Column(db.Integer(), nullable=True)  # Nombre de mots minimum
     max_word_count = db.Column(db.Integer(), nullable=True)  # Nombre de mots maximum
+    duration = db.Column(db.Integer(), nullable=True)  # Durée en minutes
     
     # Clé étrangère vers le sujet parent
     subject_id = db.Column(db.Integer(), db.ForeignKey('tcf_subject.id'), nullable=False)
@@ -70,6 +75,10 @@ class TCFTask(db.Model):
         return self
 
     def delete(self):
+        # Supprimer d'abord tous les examens liés à cette tâche
+        from .tcf_exam_model import TCFExam
+        TCFExam.query.filter_by(id_task=self.id).delete()
+        
         db.session.delete(self)
         db.session.commit()
 
@@ -88,6 +97,7 @@ class TCFTask(db.Model):
             'instructions': self.instructions,
             'min_word_count': self.min_word_count,
             'max_word_count': self.max_word_count,
+            'duration': self.duration,
             'documents': [doc.to_dict() for doc in self.documents]
         }
 
@@ -108,6 +118,10 @@ class TCFDocument(db.Model):
         return self
 
     def delete(self):
+        # Supprimer d'abord tous les examens liés à cette tâche
+        from .tcf_exam_model import TCFExam
+        TCFExam.query.filter_by(id_task=self.id).delete()
+        
         db.session.delete(self)
         db.session.commit()
 

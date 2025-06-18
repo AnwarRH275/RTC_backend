@@ -42,6 +42,7 @@ subscription_pack_model = pack_ns.model(
         "headerGradient": fields.Nested(gradient_model),
         "buttonGradient": fields.Nested(gradient_model),
         "buttonHoverGradient": fields.Nested(gradient_model),
+        "buttonText": fields.String(),
         "isActive": fields.Boolean(default=True),
         "features": fields.List(fields.Nested(feature_model)),
         "createdAt": fields.String(),
@@ -64,6 +65,7 @@ subscription_pack_input_model = pack_ns.model(
         "headerGradient": fields.Nested(gradient_model, required=True),
         "buttonGradient": fields.Nested(gradient_model, required=True),
         "buttonHoverGradient": fields.Nested(gradient_model, required=True),
+        "buttonText": fields.String(required=True, default="Payer maintenant"),
         "isActive": fields.Boolean(default=True),
         "features": fields.List(fields.String(), required=True)
     }
@@ -129,6 +131,7 @@ class SubscriptionPackResource(Resource):
                 button_gradient_end=data.get('buttonGradient', {}).get('end'),
                 button_hover_gradient_start=data.get('buttonHoverGradient', {}).get('start'),
                 button_hover_gradient_end=data.get('buttonHoverGradient', {}).get('end'),
+                button_text=data.get('buttonText', 'Payer maintenant'),
                 is_active=data.get('isActive', True)
             )
             new_pack.save()
@@ -234,6 +237,7 @@ class SubscriptionPackDetailResource(Resource):
                 button_gradient_end=data.get('buttonGradient', {}).get('end'),
                 button_hover_gradient_start=data.get('buttonHoverGradient', {}).get('start'),
                 button_hover_gradient_end=data.get('buttonHoverGradient', {}).get('end'),
+                button_text=data.get('buttonText', 'Payer maintenant'),
                 is_active=data.get('isActive', True)
             )
 
@@ -353,7 +357,7 @@ def create_default_packs():
             "5 examens réels basés sur les sujets d'actualité 2025",
             "Remarques personnalisées sur chaque production",
             "Modèles corrigés pour chaque tâche",
-            "Accès complet au simulateur d'expression écrite",
+            "Accès complet au Coach d'Expression Écrite",
             "Simulation en conditions réelles",
             "Note estimée selon le CECR"
         ]
@@ -390,7 +394,7 @@ def create_default_packs():
             "15 examens réels basés sur les sujets d'actualité 2025",
             "Remarques personnalisées sur chaque production",
             "Modèles corrigés pour chaque tâche",
-            "Accès complet au simulateur d'expression écrite",
+            "Accès complet au Coach d'Expression Écrite",
             "Simulation en conditions réelles",
             "Note estimée selon le CECR"
         ]
@@ -427,7 +431,7 @@ def create_default_packs():
             "30 examens réels basés sur les sujets d'actualité 2025",
             "Remarques personnalisées sur chaque production",
             "Modèles corrigés pour chaque tâche",
-            "Accès complet au simulateur d'expression écrite",
+            "Accès complet au Coach d'Expression Écrite",
             "Simulation en conditions réelles",
             "Note estimée selon le CECR"
         ]

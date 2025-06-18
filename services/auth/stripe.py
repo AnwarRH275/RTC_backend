@@ -46,27 +46,55 @@ payment_verify_model = stripe_ns.model(
     }
 )
 
-# Plans disponibles avec leurs IDs de produits Stripe
-PLANS = {
-    "standard": {
-        "name": "Pack Écrit Standard",
-        "price": 1499,  # 14.99 CAD
-        "usages": 5,
-        "product_id": "prod_SMeQcS5gdyO7Nh",
-    },
-    "performance": {
-        "name": "Pack Écrit Performance",
-        "price": 2999,  # 29.99 CAD
-        "usages": 15,
-        "product_id": "prod_SMePWWnxhhQXZJ",
-    },
-    "pro": {
-        "name": "Pack Écrit Pro",
-        "price": 4999,  # 49.99 CAD
-        "usages": 30,
-        "product_id": "prod_SMeQ8tIJeu8sHA",
-    },
-}
+# Plans disponibles avec leurs IDs de produits Stripe selon l'environnement
+def get_plans():
+    """Retourne les plans avec les bons IDs de produits selon l'environnement"""
+    mode = current_app.config.get('STRIPE_MODE', 'test')
+    
+    if mode == 'live':
+        # IDs de produits pour l'environnement de production
+        return {
+            "standard": {
+                "name": "Pack Écrit Standard",
+                "price": 1499,  # 14.99 CAD
+                "usages": 5,
+                "product_id": current_app.config.get('STRIPE_LIVE_PRODUCT_STANDARD', 'prod_live_standard'),
+            },
+            "performance": {
+                "name": "Pack Écrit Performance",
+                "price": 2999,  # 29.99 CAD
+                "usages": 15,
+                "product_id": current_app.config.get('STRIPE_LIVE_PRODUCT_PERFORMANCE', 'prod_live_performance'),
+            },
+            "pro": {
+                "name": "Pack Écrit Pro",
+                "price": 4999,  # 49.99 CAD
+                "usages": 30,
+                "product_id": current_app.config.get('STRIPE_LIVE_PRODUCT_PRO', 'prod_live_pro'),
+            },
+        }
+    else:
+        # IDs de produits pour l'environnement de test
+        return {
+            "standard": {
+                "name": "Pack Écrit Standard",
+                "price": 1499,  # 14.99 CAD
+                "usages": 5,
+                "product_id": "prod_SMeQcS5gdyO7Nh",
+            },
+            "performance": {
+                "name": "Pack Écrit Performance",
+                "price": 2999,  # 29.99 CAD
+                "usages": 15,
+                "product_id": "prod_SMePWWnxhhQXZJ",
+            },
+            "pro": {
+                "name": "Pack Écrit Pro",
+                "price": 4999,  # 49.99 CAD
+                "usages": 30,
+                "product_id": "prod_SMeQ8tIJeu8sHA",
+            },
+        }
 
 @stripe_ns.route('/create-checkout-session')
 class StripeCheckoutSession(Resource):
