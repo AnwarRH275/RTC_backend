@@ -43,7 +43,10 @@ class NoteMoyenneProxy(Resource):
                 
                 for url in urls:
                     try:
-                        print("Tentative de connexion a: " + str(url))
+                        try:
+                            print("Tentative de connexion a: " + str(url))
+                        except UnicodeEncodeError:
+                            print("Tentative de connexion a: " + str(url))
                         response = requests.post(
                             url,
                             json=data,
@@ -55,7 +58,10 @@ class NoteMoyenneProxy(Resource):
                             verify=False
                         )
                         
-                        print("Reponse recue - Status: " + str(response.status_code))
+                        try:
+                            print("Reponse recue - Status: " + str(response.status_code))
+                        except UnicodeEncodeError:
+                            print("Reponse recue - Status: " + str(response.status_code))
                         
                         if response.status_code == 200:
                             # Récupérer la réponse de l'API
@@ -68,8 +74,8 @@ class NoteMoyenneProxy(Resource):
                             else:
                                 # Si la structure n'est pas celle attendue, retourner un message d'erreur
                                 return {
-                                    "error": "Format de réponse incorrect",
-                                    "message": "La réponse de l'API n'a pas le format attendu",
+                                    "error": "Format de reponse incorrect",
+                                    "message": "La reponse de l'API n'a pas le format attendu",
                                     "received": api_response
                                 }, 500
                         else:
@@ -77,37 +83,61 @@ class NoteMoyenneProxy(Resource):
                             
                     except requests.exceptions.Timeout:
                         last_error = "Timeout avec " + str(url)
-                        print("Timeout avec " + str(url))
+                        try:
+                            print("Timeout avec " + str(url))
+                        except UnicodeEncodeError:
+                            print("Timeout avec URL")
                         continue
                     except requests.exceptions.ConnectionError as e:
                         error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
                         last_error = "Erreur de connexion avec " + str(url) + ": " + error_msg
-                        print("Erreur de connexion avec " + str(url) + ": " + error_msg)
+                        try:
+                            print("Erreur de connexion avec " + str(url) + ": " + error_msg)
+                        except UnicodeEncodeError:
+                            print("Erreur de connexion avec URL")
                         continue
                     except Exception as e:
                         error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
                         last_error = "Erreur avec " + str(url) + ": " + error_msg
-                        print("Erreur: " + last_error)
+                        try:
+                            print("Erreur: " + last_error)
+                        except UnicodeEncodeError:
+                            print("Erreur lors du traitement")
                         continue
                 
-                # Si toutes les tentatives ont échoué
+                # Si toutes les tentatives ont echoue
                 return {
                     "error": "Impossible de se connecter a l'API de note moyenne",
-                    "message": "Toutes les tentatives ont échoué. Dernière erreur: " + str(last_error),
+                    "message": "Toutes les tentatives ont echoue. Derniere erreur: " + str(last_error),
                     "api_endpoint": "https://91ec-203-161-57-107.ngrok-free.app"
                 }, 500
             finally:
                 # Session terminée
-                print(f"Session {session_id} terminée")
+                try:
+                    print(f"Session {session_id} terminee")
+                except UnicodeEncodeError:
+                    print(f"Session {session_id} terminee")
                 
         except Exception as e:
             error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-            print("Erreur dans le proxy de note moyenne: " + error_msg)
-            print(traceback.format_exc())
+            try:
+                print("Erreur dans le proxy de note moyenne: " + error_msg)
+            except UnicodeEncodeError:
+                print("Erreur dans le proxy de note moyenne")
+            
+            # Gestion securisee de l'affichage du traceback avec encodage UTF-8
+            try:
+                traceback_str = traceback.format_exc()
+                print(traceback_str.encode('utf-8', errors='replace').decode('utf-8'))
+            except UnicodeEncodeError:
+                print("Erreur d'encodage lors de l'affichage du traceback")
             
             # Logging de l'erreur pour la session
             if 'session_id' in locals():
-                print(f"Erreur lors du traitement de la session {session_id}")
+                try:
+                    print(f"Erreur lors du traitement de la session {session_id}")
+                except UnicodeEncodeError:
+                    print(f"Erreur lors du traitement de la session {session_id}")
             
             return {
                 'error': 'Erreur interne du serveur',

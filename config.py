@@ -1,5 +1,5 @@
-from decouple import config
 import os
+from decouple import config
 
 BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 

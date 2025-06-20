@@ -22,15 +22,30 @@ from services.proxy.note_moyenne_proxy import proxy_note_moyenne_ns
 
 app = Flask(__name__)
 
-app.config.from_object(DevConfig)
+# Configuration basée sur l'environnement
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config.from_object(ProdConfig)
+else:
+    app.config.from_object(DevConfig)
 
-# Configuration CORS pour permettre toutes les requêtes cross-origin
-CORS(app, resources={r"/*": {
-    "origins": "*",
-    "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
-    "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-    "supports_credentials": False
-}})
+# Configuration CORS adaptée pour la production
+if os.environ.get('FLASK_ENV') == 'production':
+    # Configuration CORS pour la production - domaines spécifiques
+    CORS(app, resources={r"/*": {
+        "origins": ["https://mydrtool.com", "https://www.mydrtool.com", "https://api.mydrtool.com"],
+        "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "supports_credentials": True,
+        "expose_headers": ["Content-Range", "X-Content-Range"]
+    }})
+else:
+    # Configuration CORS pour le développement - permissive
+    CORS(app, resources={r"/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
+        "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+        "supports_credentials": False
+    }})
 app.config['JWT_ACCESS_TOKEN_EXPIRES'] = False
 jwt = JWTManager(app)
 
