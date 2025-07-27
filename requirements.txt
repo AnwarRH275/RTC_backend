@@ -27,6 +27,14 @@ Jinja2==3.1.2
 MarkupSafe==2.1.1
 Mako==1.2.4
 
+# Text-to-Speech and Text Processing
+edge-tts==6.1.9
+pydantic==1.10.12
+beautifulsoup4==4.12.2
+markdown==3.5.1
+requests==2.31.0
+groq>=0.4.0
+
 # Dependencies
 aniso8601==9.0.1
 attrs==22.1.0

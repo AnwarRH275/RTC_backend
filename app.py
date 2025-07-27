@@ -12,12 +12,16 @@ from services.auth.stripe import stripe_ns
 from services.auth.sync_usages import sync_ns
 from services.crud.manage import recipie_ns
 from services.crud.tcf_admin import tcf_ns, create_test_subjects
+from services.crud.tcf_admin_oral import tcf_oral_ns
 from services.exam.exam import exam_ns
 from services.exam.attempt import attempt_ns
+from services.exam.synthesis import synthesis_ns
 from services.crud.subscription_pack_admin import pack_ns, create_default_packs
 from services.proxy.correction_proxy import proxy_ns
 from services.proxy.translation_proxy import proxy_translation_ns
 from services.proxy.note_moyenne_proxy import proxy_note_moyenne_ns
+from services.proxy.task2_proxy import proxy_task2_ns
+from services.proxy.oral_proxy import oral_proxy_ns
 
 
 app = Flask(__name__)
@@ -96,12 +100,16 @@ api.add_namespace(auth_ns)
 api.add_namespace(stripe_ns)
 api.add_namespace(sync_ns)
 api.add_namespace(tcf_ns)
+api.add_namespace(tcf_oral_ns)
 api.add_namespace(exam_ns)
 api.add_namespace(attempt_ns)
+api.add_namespace(synthesis_ns)
 api.add_namespace(pack_ns)
 api.add_namespace(proxy_ns)
 api.add_namespace(proxy_translation_ns)
 api.add_namespace(proxy_note_moyenne_ns)
+api.add_namespace(proxy_task2_ns)
+api.add_namespace(oral_proxy_ns)
 
 
 @app.before_first_request
