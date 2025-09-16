@@ -10,13 +10,13 @@ class TCFOralSubject(db.Model):
     __tablename__ = 'tcf_oral_subject'
     
     id = db.Column(db.Integer(), primary_key=True)
-    name = db.Column(db.String(), nullable=False)
-    date = db.Column(db.String(), nullable=False)  # Date de création au format YYYY-MM-DD
-    status = db.Column(db.String(), nullable=False, default="Actif")  # Actif, Inactif
+    name = db.Column(db.String(255), nullable=False)
+    date = db.Column(db.String(10), nullable=False)  # Date de création au format YYYY-MM-DD
+    status = db.Column(db.String(20), nullable=False, default="Actif")  # Actif, Inactif
     duration = db.Column(db.Integer(), nullable=True)  # Durée totale en minutes
-    subject_type = db.Column(db.String(), nullable=False, default="Oral")  # Toujours "Oral"
+    subject_type = db.Column(db.String(20), nullable=False, default="Oral")  # Toujours "Oral"
     description = db.Column(db.Text(), nullable=True)  # Description du sujet
-    combination = db.Column(db.String(), nullable=True)
+    combination = db.Column(db.String(50), nullable=True)
     
     # Relations avec les tâches orales
     oral_tasks = db.relationship('TCFOralTask', backref='subject', lazy=True, cascade="all, delete-orphan")
@@ -64,7 +64,7 @@ class TCFOralTask(db.Model):
     
     id = db.Column(db.Integer(), primary_key=True)
     title = db.Column(db.String(255), nullable=False)  # Titre de la tâche
-    task_type = db.Column(db.String(), nullable=False)  # entretien, questions, expression
+    task_type = db.Column(db.String(50), nullable=False)  # entretien, questions, expression
     objective = db.Column(db.Text(), nullable=True)  # Objectif de la tâche
     trigger = db.Column(db.Text(), nullable=True)  # Déclencheur/consigne
     evaluation_criteria = db.Column(db.Text(), nullable=True)  # Critères d'évaluation

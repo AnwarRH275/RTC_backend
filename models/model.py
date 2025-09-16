@@ -1,31 +1,8 @@
 from models.exts import db
-from datetime import datetime
-'''
-    create Recipie
-
-'''
+from datetime import datetime, timedelta
+import secrets
 
 
-class Recipie(db.Model):
-    id = db.Column(db.Integer(), primary_key=True)
-    title = db.Column(db.String(), nullable=False)
-    description = db.Column(db.Text(), nullable=False)
-
-    def __repr__(self):
-        return f"<Recipie {self.title} >"
-
-    def save(self):
-        db.session.add(self)
-        db.session.commit()
-
-    def delete(self):
-        db.session.delete(self)
-        db.session.commit()
-
-    def update(self, title, description):
-        self.title = title
-        self.description = description
-        db.session.commit()
 
 
 '''
@@ -35,29 +12,32 @@ Create users Model
 
 class User(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
-    username = db.Column(db.String(), nullable=False, unique=True)
-    email = db.Column(db.String(), nullable=False)
+    username = db.Column(db.String(80), nullable=False, unique=True)
+    email = db.Column(db.String(120), nullable=False)
     password = db.Column(db.Text(), nullable=False)
     nom = db.Column(db.Text(), nullable=True)
     prenom = db.Column(db.Text(), nullable=True)
     tel = db.Column(db.Text(), nullable=True)
-    sexe = db.Column(db.Text(), nullable=True)
-    date_naissance = db.Column(db.Text(), nullable=True)
+    sexe = db.Column(db.String(10), nullable=True)
+    date_naissance = db.Column(db.String(20), nullable=True)
     date_create = db.Column(
         db.DateTime, default=datetime.utcnow, nullable=True)
-    subscription_plan = db.Column(db.String(), nullable=True)  # standard, performance, pro
-    payment_status = db.Column(db.String(), default="pending", nullable=True)  # pending, paid
-    payment_id = db.Column(db.String(), nullable=True)  # ID de la transaction Stripe
-    role = db.Column(db.String(), default="client", nullable=False)
+    subscription_plan = db.Column(db.String(50), nullable=True)  # standard, performance, pro
+    payment_status = db.Column(db.String(20), default="pending", nullable=True)  # pending, paid
+    payment_id = db.Column(db.String(100), nullable=True)  # ID de la transaction Stripe
+    role = db.Column(db.String(20), default="client", nullable=False)
     sold = db.Column(db.Float(), default=0.0, nullable=True)
     total_sold = db.Column(db.Float(), default=0.0, nullable=True)
+    reset_token = db.Column(db.String(100), nullable=True)
+    reset_token_expires = db.Column(db.DateTime, nullable=True)
+    created_by = db.Column(db.String(80), nullable=True)  # Username du modérateur qui a créé cet utilisateur
 
     def to_dict(self):
         return {
             'email': self.email,
             'role': self.role,
             'id': self.id,
-            'date_create': self.date_create,
+            'date_create': self.date_create.isoformat() if self.date_create else None,
             'prenom': self.prenom,
             'username': self.username,
             'nom': self.nom,
@@ -65,7 +45,8 @@ class User(db.Model):
             'subscription_plan': self.subscription_plan,
             'payment_status': self.payment_status,
             'sold': self.sold,
-            'total_sold': self.total_sold
+            'total_sold': self.total_sold,
+            'created_by': self.created_by
         }
 
     def __repr__(self) -> str:
@@ -115,6 +96,31 @@ class User(db.Model):
 
     def save(self):
         db.session.add(self)
+        db.session.commit()
+    
+    def generate_reset_token(self):
+        """Génère un token de réinitialisation de mot de passe"""
+        self.reset_token = secrets.token_urlsafe(32)
+        self.reset_token_expires = datetime.utcnow() + timedelta(hours=1)  # Expire dans 1 heure
+        db.session.commit()
+        return self.reset_token
+    
+    @classmethod
+    def verify_reset_token(cls, token):
+        """Trouve et vérifie un utilisateur par son token de réinitialisation"""
+        user = cls.query.filter_by(reset_token=token).first()
+        if not user:
+            return None
+            
+        if not user.reset_token_expires or datetime.utcnow() > user.reset_token_expires:
+            return None
+            
+        return user
+    
+    def clear_reset_token(self):
+        """Efface le token de réinitialisation après utilisation"""
+        self.reset_token = None
+        self.reset_token_expires = None
         db.session.commit()
 
 

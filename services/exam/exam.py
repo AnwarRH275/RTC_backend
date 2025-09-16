@@ -22,6 +22,7 @@ exam_model = exam_ns.model(
         "points_fort": fields.String(),
         "point_faible": fields.String(),
         "traduction_reponse_ia": fields.String(),
+        "type_exam": fields.String(required=True, description="Type d'examen: 'écrit' ou 'oral'"),
         "date_passage": fields.DateTime()
     }
 )
@@ -39,6 +40,7 @@ exam_input_model = exam_ns.model(
         "points_fort": fields.String(),
         "point_faible": fields.String(),
         "traduction_reponse_ia": fields.String(),
+        "type_exam": fields.String(required=True, description="Type d'examen: 'écrit' ou 'oral'"),
         # date_passage sera générée automatiquement par le modèle
     }
 )
@@ -94,6 +96,7 @@ detailed_exam_model = exam_ns.model(
         "points_fort": fields.String(),
         "point_faible": fields.String(),
         "traduction_reponse_ia": fields.String(),
+        "type_exam": fields.String(description="Type d'examen: 'écrit' ou 'oral'"),
         "date_passage": fields.DateTime(),
         "user": fields.Nested(user_nested_model), # Inclure les données utilisateur
         "subject": fields.Nested(tcf_subject_nested_model), # Inclure les données sujet
@@ -157,7 +160,8 @@ class TCFExamUserResource(Resource):
                 reponse_ia=data.get('reponse_ia'),
                 points_fort=data.get('points_fort'),
                 point_faible=data.get('point_faible'),
-                traduction_reponse_ia=data.get('traduction_reponse_ia')
+                traduction_reponse_ia=data.get('traduction_reponse_ia'),
+                type_exam=data.get('type_exam', 'écrit')  # Valeur par défaut 'écrit'
                 # date_passage est définie par défaut dans le modèle
             )
             new_exam.save()

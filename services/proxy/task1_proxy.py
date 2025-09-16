@@ -19,11 +19,11 @@ from synthesis import process_text_with_groq, synthesize_with_edgetts
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
-task2_ns = Namespace('proxy-task2', description='Proxy services for Task 2 AI agent')
+task1_ns = Namespace('proxy-task1', description='Proxy services for Task 1 AI agent')
 
-# Modèle pour la requête à l'agent IA de la tâche 2
-task2_request_model = task2_ns.model(
-    "Task2Request",
+# Modèle pour la requête à l'agent IA de la tâche 1
+task1_request_model = task1_ns.model(
+    "Task1Request",
     {
         "chatInput": fields.String(required=True, description="Message transcrit de l'utilisateur"),
         "sessionId": fields.String(description="ID de session unique pour l'utilisateur"),
@@ -32,8 +32,8 @@ task2_request_model = task2_ns.model(
 )
 
 # Modèle pour la réponse
-task2_response_model = task2_ns.model(
-    "Task2Response",
+task1_response_model = task1_ns.model(
+    "Task1Response",
     {
         "output": fields.String(description="Réponse de l'agent IA"),
         "audio_url": fields.String(description="URL du fichier audio généré"),
@@ -41,13 +41,13 @@ task2_response_model = task2_ns.model(
     }
 )
 
-@task2_ns.route('/agent-vocal')
-class Task2Proxy(Resource):
-    @task2_ns.expect(task2_request_model)
-    @task2_ns.doc('proxy_task2_agent')
+@task1_ns.route('/agent-vocal')
+class Task1Proxy(Resource):
+    @task1_ns.expect(task1_request_model)
+    @task1_ns.doc('proxy_task1_agent')
     def post(self):
         """
-        Proxy pour l'API de l'agent IA de la tâche 2
+        Proxy pour l'API de l'agent IA de la tâche 1
         Connecte à l'API externe et convertit la réponse en audio
         """
         try:
@@ -73,7 +73,7 @@ class Task2Proxy(Resource):
                 payload["objectif"] = objectif
             
             # URL de l'API externe
-            url = "https://n8n.expressiontcf.com/webhook/agent-vocal-tache2"
+            url = "https://n8n.expressiontcf.com/webhook/agent-vocal-tache1"
             
             try:
                 logger.info(f"Envoi de la requête à {url} avec sessionId: {session_id}")
@@ -173,7 +173,7 @@ class Task2Proxy(Resource):
             
         except Exception as e:
             error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-            logger.error(f"Erreur dans le proxy de la tâche 2: {error_msg}")
+            logger.error(f"Erreur dans le proxy de la tâche 1: {error_msg}")
             logger.error(traceback.format_exc())
             return {
                 'error': 'Erreur interne du serveur',
@@ -181,4 +181,4 @@ class Task2Proxy(Resource):
             }, 500
 
 # Export du namespace pour l'importation
-proxy_task2_ns = task2_ns
+proxy_task1_ns = task1_ns

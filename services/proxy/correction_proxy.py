@@ -3,6 +3,11 @@ from flask_restx import Resource, Namespace, fields
 import requests
 import traceback
 import urllib.parse
+import time
+import urllib3
+
+# Désactiver les avertissements SSL pour éviter l'encombrement des logs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 proxy_ns = Namespace('proxy', description='Proxy services for external APIs')
 
@@ -29,17 +34,19 @@ class CorrectionProxy(Resource):
             # Récupérer les données de la requête
             data = request.get_json()
             
-            # Essayer d'abord HTTPS, puis HTTP
+            # URLs de fallback avec HTTPS et HTTP
             urls = [
-                'https://91ec-203-161-57-107.ngrok-free.app/webhook/agent-expression-ecrite',
-                
+                'https://n8n.expressiontcf.com/webhook/agent-expression-ecrite',
+                'http://n8n.expressiontcf.com/webhook/agent-expression-ecrite',
+              
             ]
             
             last_error = None
             
+            # Essayer chaque URL une seule fois
             for url in urls:
                 try:
-                    print("Tentative de connexion a: " + str(url))
+                    print(f"Tentative de connexion a: {url}")
                     response = requests.post(
                         url,
                         json=data,
@@ -47,37 +54,44 @@ class CorrectionProxy(Resource):
                             'Content-Type': 'application/json; charset=utf-8',
                             'Accept': 'application/json'
                         },
-                        timeout=2360,
+                        timeout=6000,  # 100 minutes timeout
                         verify=False
                     )
                     
-                    print("Reponse recue - Status: " + str(response.status_code))
+                    print(f"Reponse recue - Status: {response.status_code}")
                     
+                    # Si succès, retourner immédiatement sans essayer d'autres URLs
                     if response.status_code == 200:
+                        print(f"Succès avec {url} - Arrêt des tentatives")
                         return response.json(), 200
                     else:
-                        last_error = "Status " + str(response.status_code) + ": " + str(response.text[:200])
+                        last_error = f"Status {response.status_code}: {response.text[:200]}"
+                        print(f"Échec avec {url}: {last_error}")
+                        # Continuer avec l'URL suivante
                         
                 except requests.exceptions.Timeout:
-                    last_error = "Timeout avec " + str(url)
-                    print("Timeout avec " + str(url))
+                    last_error = f"Timeout avec {url}"
+                    print(f"Timeout avec {url}")
                     continue
                 except requests.exceptions.ConnectionError as e:
                     error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-                    last_error = "Erreur de connexion avec " + str(url) + ": " + error_msg
-                    print("Erreur de connexion avec " + str(url) + ": " + error_msg)
+                    last_error = f"Erreur de connexion avec {url}: {error_msg}"
+                    print(f"Erreur de connexion avec {url}: {error_msg}")
                     continue
                 except Exception as e:
                     error_msg = str(e).encode('utf-8', errors='replace').decode('utf-8')
-                    last_error = "Erreur avec " + str(url) + ": " + error_msg
-                    print("Erreur: " + last_error)
+                    last_error = f"Erreur avec {url}: {error_msg}"
+                    print(f"Erreur avec {url}: {error_msg}")
                     continue
             
-            # Si toutes les tentatives ont echoue
+            # Si toutes les tentatives ont échoué
+            print(f"Toutes les URLs ont échoué. Dernière erreur: {last_error}")
             return {
                 "error": "Impossible de se connecter a l'API de correction",
-                "message": "Toutes les tentatives ont echoue. Derniere erreur: " + str(last_error),
-                "api_endpoint": "203.161.57.107:5678"
+                "message": f"Toutes les tentatives ont echoue avec {len(urls)} URLs",
+                "details": str(last_error),
+                "api_endpoints": urls,
+                "suggestion": "Verifiez la connectivité réseau et l'état du service externe"
             }, 500
             
         except Exception as e:

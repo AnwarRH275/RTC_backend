@@ -1,0 +1,32 @@
+FROM python:3.9-slim
+
+# Définir le dossier de travail
+WORKDIR /app
+
+# Installer les dépendances système nécessaires pour le dev
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copier les dépendances Python et les installer
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copier tout le code source après installation des dépendances
+COPY . .
+
+# Copier le fichier d'environnement de développement
+COPY .env.dev .env
+
+# Variables d'environnement pour le mode développement
+ENV FLASK_APP=app.py
+ENV FLASK_ENV=development
+ENV PYTHONUNBUFFERED=1
+
+# Exposer le port utilisé par l'appli
+EXPOSE 5001
+
+# Initialiser la base de données et lancer le serveur
+CMD ["sh", "-c", "python init_db.py && flask run --host=0.0.0.0 --port=5001"]

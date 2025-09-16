@@ -8,6 +8,7 @@ flask-restx==1.0.3
 
 # Database
 SQLAlchemy==1.4.45
+PyMySQL==1.1.0
 
 # Security
 Werkzeug==2.2.2
@@ -16,6 +17,9 @@ PyJWT==2.6.0
 # Configuration
 python-decouple==3.6
 python-dotenv==0.21.0
+
+# Email dependencies (already included in Python standard library)
+# smtplib, ssl, email.mime are built-in modules
 
 # Payment processing
 stripe>=5.0.0
@@ -28,12 +32,15 @@ MarkupSafe==2.1.1
 Mako==1.2.4
 
 # Text-to-Speech and Text Processing
-edge-tts==6.1.9
+edge-tts>=6.1.16
 pydantic==1.10.12
 beautifulsoup4==4.12.2
 markdown==3.5.1
 requests==2.31.0
 groq>=0.4.0
+
+# Production server
+gunicorn==21.2.0
 
 # Dependencies
 aniso8601==9.0.1

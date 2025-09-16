@@ -36,7 +36,7 @@ class NoteMoyenneProxy(Resource):
             try:
                 # URL du webhook pour la note moyenne
                 urls = [
-                    'https://91ec-203-161-57-107.ngrok-free.app/webhook/agent-note-moyenne',
+                    'https://n8n.expressiontcf.com/webhook/agent-note-moyenne',
                 ]
                 
                 last_error = None
@@ -54,7 +54,7 @@ class NoteMoyenneProxy(Resource):
                                 'Content-Type': 'application/json; charset=utf-8',
                                 'Accept': 'application/json'
                             },
-                            timeout=300,  # Timeout de 5 minutes
+                            timeout=6000,  # Augmenté à 100 minutes pour éviter les timeouts
                             verify=False
                         )
                         
@@ -109,7 +109,7 @@ class NoteMoyenneProxy(Resource):
                 return {
                     "error": "Impossible de se connecter a l'API de note moyenne",
                     "message": "Toutes les tentatives ont echoue. Derniere erreur: " + str(last_error),
-                    "api_endpoint": "https://91ec-203-161-57-107.ngrok-free.app"
+                    "api_endpoint": "https://n8n.expressiontcf.com"
                 }, 500
             finally:
                 # Session terminée

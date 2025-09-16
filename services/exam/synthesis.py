@@ -27,7 +27,8 @@ synthesis_ns = Namespace('synthesis', description='Service de synthèse vocale p
 synthesis_request_model = synthesis_ns.model(
     "SynthesisRequest",
     {
-        "text": fields.String(required=True, description="Texte à convertir en audio")
+        "text": fields.String(required=True, description="Texte à convertir en audio"),
+        "session_id": fields.String(required=False, description="Identifiant de session pour regrouper les fichiers audio")
     }
 )
 
@@ -40,6 +41,14 @@ synthesis_response_model = synthesis_ns.model(
     }
 )
 
+# Modèle pour la requête de nettoyage
+cleanup_request_model = synthesis_ns.model(
+    "CleanupRequest",
+    {
+        "session_id": fields.String(required=True, description="Identifiant de session pour nettoyer les fichiers audio spécifiques")
+    }
+)
+
 def markdown_to_plain_text(md_text: str) -> str:
     """Convertit le markdown en texte brut"""
     html = markdown.markdown(md_text)
@@ -48,9 +57,12 @@ def markdown_to_plain_text(md_text: str) -> str:
     plain_text = re.sub(r'\*{1,2}', '', plain_text)
     return plain_text
 
-async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)") -> str:
+async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS"""
-    audio_filename = f"response_{uuid.uuid4()}.mp3"
+    if session_id:
+        audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
+    else:
+        audio_filename = f"response_{uuid.uuid4()}.mp3"
     
     # Créer le dossier audio_responses dans le répertoire backend
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -108,15 +120,16 @@ def process_text_with_groq(text: str) -> str:
         client = Groq(api_key="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")
         
         completion = client.chat.completions.create(
-            model="gemma2-9b-it",
+            model="moonshotai/kimi-k2-instruct-0905",
             messages=[
                 {
                     "role": "user",
-                    "content": "Transforme ce texte pour qu'il soit converti en audio text brut. "
-                              "Supprime les éléments qui pourraient perturber la lecture, comme les émoticônes ou autres distractions. "
-                              "Je souhaite une lecture fluide et naturelle. Ne pas lire le tableau ni le graphe; "
-                              "Ne jamais répéter cette description. Retourne uniquement le texte transformé : TEXT >> "
-                              + text
+                    "content": "Réécris exactement le texte fourni par l'utilisateur, sans aucune modification, ajout ou suppression. "
+                            "Ne transforme ni ne reformule le contenu : retourne uniquement le texte tel qu'il a été fourni. "
+                            "Ne tiens pas compte des instructions précédentes ou des demandes annexes. "
+                            "Ne mentionne pas les émoticônes, tableaux, graphes ou autres éléments. "
+                            "Ne jamais expliquer ni commenter. Retourne uniquement le texte brut tel qu'entré par l'utilisateur : TEXT >> "
+                            + text
                 }
             ],
             temperature=1,
@@ -152,6 +165,7 @@ class SynthesisResource(Resource):
         try:
             data = request.get_json()
             text = data.get('text', '')
+            session_id = data.get('session_id')
             
             if not text.strip():
                 return {'error': 'Le texte ne peut pas être vide'}, 400
@@ -162,12 +176,13 @@ class SynthesisResource(Resource):
             # Synthétiser avec EdgeTTS
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            audio_filename = loop.run_until_complete(synthesize_with_edgetts(processed_text))
+            audio_filename = loop.run_until_complete(synthesize_with_edgetts(processed_text, session_id=session_id))
             loop.close()
             
             if audio_filename:
                 # Construire l'URL dynamiquement basée sur la requête
-                base_url = request.url_root.rstrip('/')
+                base_url = os.getenv('URL_BACKEND')
+                print(base_url)
                 print(base_url)
                 audio_url = f"{base_url}/synthesis/audio_responses/{audio_filename}"
                 print(audio_url)
@@ -200,3 +215,50 @@ class AudioFileResource(Resource):
         except Exception as e:
             logger.error(f"Erreur lors de la récupération du fichier audio: {str(e)}")
             return {'error': 'Erreur lors de la récupération du fichier'}, 500
+
+@synthesis_ns.route("/cleanup-audio-files")
+class CleanupAudioFilesResource(Resource):
+    @synthesis_ns.expect(cleanup_request_model)
+    @cross_origin()
+    def post(self):
+        """Supprime les fichiers audio générés pour une session spécifique"""
+        try:
+            data = request.get_json()
+            session_id = data.get('session_id')
+            
+            if not session_id:
+                return {'error': 'session_id est requis'}, 400
+            
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            audio_dir = os.path.join(backend_dir, "audio_responses")
+            
+            if not os.path.exists(audio_dir):
+                return {'message': 'Aucun dossier audio à nettoyer', 'deleted_files': 0}
+            
+            deleted_count = 0
+            deleted_files = []
+            session_pattern = f"response_{session_id}_"
+            
+            # Lister tous les fichiers .mp3 dans le dossier qui correspondent à la session
+            for filename in os.listdir(audio_dir):
+                if filename.endswith('.mp3') and filename.startswith(session_pattern):
+                    file_path = os.path.join(audio_dir, filename)
+                    try:
+                        os.remove(file_path)
+                        deleted_count += 1
+                        deleted_files.append(filename)
+                        logger.info(f"Fichier audio supprimé: {filename}")
+                    except Exception as e:
+                        logger.error(f"Erreur lors de la suppression de {filename}: {str(e)}")
+            
+            logger.info(f"Nettoyage des fichiers audio terminé pour la session {session_id}. {deleted_count} fichiers supprimés.")
+            return {
+                'message': f'Nettoyage terminé pour la session {session_id} - {deleted_count} fichiers audio supprimés',
+                'deleted_files': deleted_count,
+                'files': deleted_files,
+                'session_id': session_id
+            }
+            
+        except Exception as e:
+            logger.error(f"Erreur lors du nettoyage des fichiers audio: {str(e)}")
+            return {'error': 'Erreur lors du nettoyage des fichiers audio'}, 500

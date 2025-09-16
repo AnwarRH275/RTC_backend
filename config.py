@@ -5,12 +5,14 @@ BASE_DIR = os.path.dirname(os.path.realpath(__file__))
 
 
 class Config:
-    SECRET_KEY = config('SECRET_KEY')
+    SECRET_KEY = config('SECRET_KEY', default='dev-secret-key-change-in-production')
     SQLALCHEMY_TRACK_MODIFICATIONS = config(
-        'SQLALCHEMY_TRACK_MODIFICATIONS', cast=bool)
+        'SQLALCHEMY_TRACK_MODIFICATIONS', cast=bool, default=False)
     
     # Configuration Stripe
     STRIPE_MODE = config('STRIPE_MODE', default='test')
+    STRIPE_CURRENCY = config('STRIPE_CURRENCY', default='usd')
+
     STRIPE_TEST_SECRET_KEY = config('STRIPE_TEST_SECRET_KEY', default='sk_test_51RPoNBGWv7C2JcFAqsnTf4QtehR3Bge5T35DKVCSqTqqpkWxAs2qiFNPgndEksL540qAwc3OffRAgYMduzeJcCUH00IK3zt5yC')
     STRIPE_LIVE_SECRET_KEY = config('STRIPE_LIVE_SECRET_KEY', default='')
     STRIPE_TEST_WEBHOOK_SECRET = config('STRIPE_TEST_WEBHOOK_SECRET', default='whsec_test_webhook_secret')
@@ -20,10 +22,20 @@ class Config:
     STRIPE_LIVE_PRODUCT_STANDARD = config('STRIPE_LIVE_PRODUCT_STANDARD', default='')
     STRIPE_LIVE_PRODUCT_PERFORMANCE = config('STRIPE_LIVE_PRODUCT_PERFORMANCE', default='')
     STRIPE_LIVE_PRODUCT_PRO = config('STRIPE_LIVE_PRODUCT_PRO', default='')
+    
+    # IDs de produits Stripe TEST (valeurs par défaut)
+    STRIPE_TEST_PRODUCT_STANDARD = config('STRIPE_TEST_PRODUCT_STANDARD', default='')
+    STRIPE_TEST_PRODUCT_PERFORMANCE = config('STRIPE_TEST_PRODUCT_PERFORMANCE', default='')
+    STRIPE_TEST_PRODUCT_PRO = config('STRIPE_TEST_PRODUCT_PRO', default='')
 
 
 class DevConfig(Config):
+    # Configuration SQLite actuelle (commentée)
     SQLALCHEMY_DATABASE_URI = "sqlite:///"+os.path.join(BASE_DIR, 'dev.db')
+    
+    # Configuration MariaDB via Docker
+    #SQLALCHEMY_DATABASE_URI = "mysql+pymysql://tcf_canada_STZ:STZue3jm#4s3ttl#@localhost:3306/admin_tcf_canada_STZ"
+    
     DEBUG = True
     SQLALCHEMY_ECHO = True
 

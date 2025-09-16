@@ -11,11 +11,12 @@ class TCFExam(db.Model):
     id_subject = db.Column(db.Integer(), db.ForeignKey('tcf_subject.id'), nullable=False)
     id_task = db.Column(db.Integer(), db.ForeignKey('tcf_task.id'), nullable=False)
     reponse_utilisateur = db.Column(db.Text(), nullable=True)
-    score = db.Column(db.String(), nullable=True) # Score peut être un texte (ex: B2, C1) ou un nombre
+    score = db.Column(db.String(20), nullable=True) # Score peut être un texte (ex: B2, C1) ou un nombre
     reponse_ia = db.Column(db.Text(), nullable=True)
     points_fort = db.Column(db.Text(), nullable=True)
     point_faible = db.Column(db.Text(), nullable=True)
     traduction_reponse_ia = db.Column(db.Text(), nullable=True)
+    type_exam = db.Column(db.String(10), nullable=False, default='écrit') # 'écrit' ou 'oral'
     date_passage = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
 
     # Relationships

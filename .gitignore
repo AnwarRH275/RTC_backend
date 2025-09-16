@@ -1,21 +1,79 @@
 # Ignorer les caches Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
 
 # Ignorer les fichiers de base de données
 
 
 # Ignorer les journaux
 *.log
+logs/
 
 # Ignorer les environnements virtuels
-
+venv/
+venv311/
+env/
+ENV/
+.venv/
 
 # Ignorer les dossiers de migration (gérés par Flask-Migrate)
 migrations/
 
 # Ignorer les fichiers spécifiques à macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # Ignorer les fichiers de configuration locale
 instance/
+.env.local
+.env.*.local
+
+# Ignorer les fichiers audio (MP3, WAV, etc.)
+*.mp3
+*.wav
+*.ogg
+*.m4a
+*.aac
+*.flac
+audio_responses/
+tmp/
+
+# Ignorer les fichiers temporaires et de sauvegarde
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
+
+# Ignorer les archives
+*.tar
+*.tar.gz
+*.zip
+*.rar
+*.7z
+
+# Ignorer les fichiers de build et distribution
+build/
+dist/
+*.egg-info/
+
+# Ignorer les fichiers IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ignorer les certificats et clés
+*.pem
+*.key
+*.crt
+*.cert
+
+# Ignorer les fichiers de cache
+.cache/
+.pytest_cache/

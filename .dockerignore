@@ -1,0 +1,46 @@
+# Ignore everything by default
+*
+
+# Allow essential files
+!requirements.txt
+!dev.db
+!*.py
+!*.py
+!models/
+!services/
+!config.py
+!app.py
+!init_db.py
+!add_admin_user.py
+!passenger_wsgi.py
+
+# Allow directories with Python files
+!models/**/*.py
+!services/**/*.py
+
+# Allow environment files
+!.env.example
+
+# Ignore specific large files and directories
+*.zip
+*.tar
+*.tar.gz
+*.rar
+audio_responses/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+ENV/
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+*.log
+tmp/
+test.db
+dev_.db
+dev__.db

@@ -7,14 +7,14 @@ Modèle pour les sujets TCF (Test de Connaissance du Français)
 
 class TCFSubject(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
-    name = db.Column(db.String(), nullable=False)
-    date = db.Column(db.String(), nullable=False)  # Date de création au format YYYY-MM-DD
-    status = db.Column(db.String(), nullable=False, default="Actif")  # Actif, Inactif
+    name = db.Column(db.String(255), nullable=False)
+    date = db.Column(db.String(10), nullable=False)  # Date de création au format YYYY-MM-DD
+    status = db.Column(db.String(20), nullable=False, default="Actif")  # Actif, Inactif
     duration = db.Column(db.Integer(), nullable=False)  # Durée en minutes
-    subject_type = db.Column(db.String(), nullable=False)  # Écrit, Oral
+    subject_type = db.Column(db.String(20), nullable=False)  # Écrit, Oral
     description = db.Column(db.Text(), nullable=True)  # Description du sujet
     
-    combination = db.Column(db.String(), nullable=True)
+    combination = db.Column(db.String(50), nullable=True)
     tasks = db.relationship('TCFTask', backref='subject', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
@@ -53,7 +53,7 @@ class TCFSubject(db.Model):
 
 class TCFTask(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
-    title = db.Column(db.String(), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
     structure = db.Column(db.Text(), nullable=True)  # Structure à respecter
     instructions = db.Column(db.Text(), nullable=True)  # Instructions spécifiques
     min_word_count = db.Column(db.Integer(), nullable=True)  # Nombre de mots minimum

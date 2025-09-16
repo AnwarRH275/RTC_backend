@@ -1,4 +1,4 @@
-from flask import request, jsonify, make_response
+from flask import request, jsonify, make_response, g
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from models.model import User
@@ -6,6 +6,13 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from models.exts import db
 import random
 import string
+from services.email.email_service import EmailService, email_service
+from services.moderator_permissions import ModeratorPermissions, validate_moderator_access
+import logging
+
+# Configuration du logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 auth_ns = Namespace('auth', description='namespace for authentification')
@@ -37,6 +44,23 @@ login_model = auth_ns.model(
     {
         "username": fields.String(),
         "password": fields.String(),
+    }
+)
+
+# model (serializer) for forgot password
+forgot_password_model = auth_ns.model(
+    "ForgotPassword",
+    {
+        "email": fields.String(required=True, description="Email de l'utilisateur")
+    }
+)
+
+# model (serializer) for reset password
+reset_password_model = auth_ns.model(
+    "ResetPassword",
+    {
+        "token": fields.String(required=True, description="Token de réinitialisation"),
+        "new_password": fields.String(required=True, description="Nouveau mot de passe")
     }
 )
 
@@ -74,15 +98,28 @@ class SignUp(Resource):
         return make_response(jsonify({"message": "User updated successfully", "status": "success"}), 200)
 
     @auth_ns.expect(signup_model)
+    @jwt_required(optional=True)
     def post(self):
         data = request.get_json()
+        
+        # Validation des champs requis
+        required_fields = ['username', 'email', 'password', 'nom', 'prenom']
+        missing_fields = [field for field in required_fields if not data.get(field)]
+        
+        if missing_fields:
+            logger.warning(f"Champs manquants lors de l'inscription: {missing_fields}")
+            return make_response(jsonify({
+                "message": f"Champs requis manquants: {', '.join(missing_fields)}",
+                "missing_fields": missing_fields
+            }), 422)
+        
         username_find = User.query.filter_by(
             username=data.get('username')).first()
         # email_find = User.query.filter_by(email=data.get('email')).first()
 
         # print(email_find)
         if username_find is not None:
-            return jsonify({"message": "User exist"})
+            return make_response(jsonify({"message": "User exist"}), 409)
         
         # Récupérer dynamiquement les usages du plan depuis la base de données
         from models.subscription_pack_model import SubscriptionPack
@@ -95,7 +132,13 @@ class SignUp(Resource):
         else:
             # Valeur par défaut si le plan n'est pas trouvé
             sold = 0.0
-
+        # Récupérer l'utilisateur connecté
+        try:
+            current_user = get_jwt_identity()
+            logger.info(f"Utilisateur connecté identifié: {current_user}")
+        except Exception as e:
+            logger.warning(f"Impossible de récupérer l'identité JWT: {str(e)}")
+            current_user = "public"
         # Créer un nouvel utilisateur
         new_user = User(
             username=data.get('username'),
@@ -108,12 +151,29 @@ class SignUp(Resource):
             date_naissance=data.get('date_naissance'),
             subscription_plan=data.get('plan'),
             payment_status="paid",  # Considéré comme payé après redirection de Stripe
+            role=data.get('role', 'client'),  # Assigner le rôle ou 'client' par défaut
             sold=sold,
-            total_sold=sold
+            total_sold=sold,
+            created_by=current_user
         )
-
+        
+        logger.info(f"Nouvel utilisateur créé: {new_user.username}, créé par: {current_user}")
         new_user.save()
-        return make_response(jsonify({"message": "User created successfully", "status": "success"}), 201)
+        
+        # L'email de bienvenue sera envoyé lors du paiement de la commande
+        # pour inclure le numéro de commande (voir order_public.py)
+        
+        # Générer les tokens JWT après la création du compte
+        access_token = create_access_token(identity=new_user.username)
+        refresh_token = create_refresh_token(identity=new_user.username)
+        
+        return make_response(jsonify({
+            "message": "User created successfully", 
+            "status": "success",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "user_info": new_user.to_dict()
+        }), 201)
 
 
 @auth_ns.route('/login')
@@ -133,19 +193,19 @@ class Login(Resource):
             print(user)
             
         if user is None:
-            return jsonify({"message": "Utilisateur non trouvé. Vérifiez votre nom d'utilisateur ou email."}), 404
+            return {"message": "Utilisateur non trouvé. Vérifiez votre nom d'utilisateur ou email."}, 404
             
         if check_password_hash(user.password, password):
             access_token = create_access_token(identity=user.username)
             refresh_token = create_refresh_token(
                 identity=user.username)
-            return jsonify({
+            return {
                 'access_token': access_token,
                 'refresh_token': refresh_token,
                 'user_info': user.to_dict()
-            })
+            }
         else:
-            return jsonify({"message": "Mot de passe invalide"}), 401
+            return {"message": "Mot de passe invalide"}, 401
 
 
 @auth_ns.route('/counter')
@@ -157,14 +217,42 @@ class counter(Resource):
 
 @auth_ns.route('/delete/<username>')
 class DeleteUser(Resource):
+    @jwt_required()
     def delete(self, username):
-        user = User.query.filter_by(username=username).first()
-        if user:
-            db.session.delete(user)
-            db.session.commit()
-            return {'message': 'User deleted successfully'}, 200
-        else:
-            return {'message': 'User not found'}, 404
+        try:
+            # Récupérer l'utilisateur connecté
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(username=current_user_id).first()
+            
+            if not current_user:
+                return {'message': 'Utilisateur connecté non trouvé'}, 404
+            
+            # Si l'utilisateur connecté est un modérateur, vérifier les permissions
+            if current_user.role == 'moderator':
+                moderator_info = {
+                    'username': current_user.username,
+                    'role': current_user.role
+                }
+                
+                can_delete, message, target_user_info = validate_moderator_access(
+                    moderator_info, username, 'delete'
+                )
+                
+                if not can_delete:
+                    return {'message': message}, 403
+            
+            # Procéder à la suppression
+            user = User.query.filter_by(username=username).first()
+            if user:
+                db.session.delete(user)
+                db.session.commit()
+                return {'message': 'Utilisateur supprimé avec succès'}, 200
+            else:
+                return {'message': 'Utilisateur non trouvé'}, 404
+                
+        except Exception as e:
+            db.session.rollback()
+            return {'message': f'Erreur lors de la suppression: {str(e)}'}, 500
 
 @auth_ns.route('/user-info')
 class UserInfo(Resource):
@@ -212,7 +300,8 @@ user_model = auth_ns.model(
         "payment_status": fields.String(),
         "role": fields.String(),
          "sold": fields.Float(default=0.0),
-        "total_sold": fields.Float(default=0.0)
+        "total_sold": fields.Float(default=0.0),
+        "created_by": fields.String()
     }
 )
 
@@ -227,11 +316,42 @@ update_sold_model = auth_ns.model(
 
 @auth_ns.route('/users')
 class UserListResource(Resource):
+    @jwt_required()
     @auth_ns.marshal_list_with(user_model)
     def get(self):
         '''Récupérer tous les utilisateurs'''
-        users = User.query.all()
-        return users
+        try:
+            # Récupérer l'utilisateur connecté
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(username=current_user_id).first()
+            
+            if not current_user:
+                return {'message': 'Utilisateur connecté non trouvé'}, 404
+            
+            # Si l'utilisateur connecté est un modérateur, filtrer les utilisateurs
+            if current_user.role == 'moderator':
+                moderator_info = {
+                    'username': current_user.username,
+                    'role': current_user.role
+                }
+                
+                all_users = User.query.all()
+                accessible_users = ModeratorPermissions.get_accessible_users(
+                    moderator_info, [user.to_dict() for user in all_users]
+                )
+                
+                # Récupérer les objets User correspondants
+                accessible_usernames = [user['username'] for user in accessible_users]
+                users = User.query.filter(User.username.in_(accessible_usernames)).all()
+                
+                return users
+            else:
+                # Pour les administrateurs, retourner tous les utilisateurs
+                users = User.query.all()
+                return users
+                
+        except Exception as e:
+            return {'message': f'Erreur lors de la récupération des utilisateurs: {str(e)}'}, 500
 
 @auth_ns.route('/refresh')
 class RefreshResource(Resource):
@@ -253,43 +373,91 @@ update_total_sold_model = auth_ns.model(
 
 @auth_ns.route('/update-sold')
 class UpdateSoldResource(Resource):
+    @jwt_required()
     @auth_ns.expect(update_sold_model)
     def put(self):
-        data = request.get_json()
-        username = data.get('username')
-        new_sold_value = data.get('new_sold_value')
-
-        user = User.query.filter_by(username=username).first()
-
-        if not user:
-            return jsonify({"message": "Utilisateur non trouvé"}), 404
-
         try:
+            data = request.get_json()
+            username = data.get('username')
+            new_sold_value = data.get('new_sold_value')
+            
+            # Récupérer l'utilisateur connecté
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(username=current_user_id).first()
+            
+            if not current_user:
+                return {'message': 'Utilisateur connecté non trouvé'}, 404
+            
+            # Si l'utilisateur connecté est un modérateur, vérifier les permissions
+            if current_user.role == 'moderator':
+                moderator_info = {
+                    'username': current_user.username,
+                    'role': current_user.role
+                }
+                
+                can_manage, message, target_user_info = validate_moderator_access(
+                    moderator_info, username, 'manage'
+                )
+                
+                if not can_manage:
+                    return {'message': message}, 403
+            
+            user = User.query.filter_by(username=username).first()
+            
+            if not user:
+                return {"message": "Utilisateur non trouvé"}, 404
+            
             user.update_sold(new_sold_value)
-            return make_response(jsonify({"message": "Solde utilisateur mis à jour avec succès", "sold": user.sold}), 200)
+            return {"message": "Solde utilisateur mis à jour avec succès", "sold": user.sold}, 200
+            
         except Exception as e:
+            db.session.rollback()
             print(f"Erreur lors de la mise à jour du solde : {str(e)}")
-            return make_response(jsonify({"message": f"Erreur lors de la mise à jour du solde : {str(e)}"}), 500)
+            return {"message": f"Erreur lors de la mise à jour du solde : {str(e)}"}, 500
 
 @auth_ns.route('/update-total-sold')
 class UpdateTotalSoldResource(Resource):
+    @jwt_required()
     @auth_ns.expect(update_total_sold_model)
     def put(self):
-        data = request.get_json()
-        username = data.get('username')
-        new_total_sold_value = data.get('new_total_sold_value')
-
-        user = User.query.filter_by(username=username).first()
-
-        if not user:
-            return make_response(jsonify({"message": "Utilisateur non trouvé"}), 404)
-
         try:
+            data = request.get_json()
+            username = data.get('username')
+            new_total_sold_value = data.get('new_total_sold_value')
+            
+            # Récupérer l'utilisateur connecté
+            current_user_id = get_jwt_identity()
+            current_user = User.query.filter_by(username=current_user_id).first()
+            
+            if not current_user:
+                return {'message': 'Utilisateur connecté non trouvé'}, 404
+            
+            # Si l'utilisateur connecté est un modérateur, vérifier les permissions
+            if current_user.role == 'moderator':
+                moderator_info = {
+                    'username': current_user.username,
+                    'role': current_user.role
+                }
+                
+                can_manage, message, target_user_info = validate_moderator_access(
+                    moderator_info, username, 'manage'
+                )
+                
+                if not can_manage:
+                    return {'message': message}, 403
+            
+            user = User.query.filter_by(username=username).first()
+            
+            if not user:
+                return {"message": "Utilisateur non trouvé"}, 404
+            
             user.update_total_sold(new_total_sold_value)
-            return make_response(jsonify({"message": "Solde total utilisateur mis à jour avec succès", "total_sold": user.total_sold}), 200)
+            return {"message": "Solde total utilisateur mis à jour avec succès", "total_sold": user.total_sold}, 200
+            
         except Exception as e:
+            db.session.rollback()
             print(f"Erreur lors de la mise à jour du solde total : {str(e)}")
-            return make_response(jsonify({"message": f"Erreur lors de la mise à jour du solde total : {str(e)}"}), 500)
+            return {"message": f"Erreur lors de la mise à jour du solde total : {str(e)}"}, 500
 
 @auth_ns.route('/MyPlan')
 class MyPlanResource(Resource):
@@ -313,3 +481,67 @@ class CurrentUserResource(Resource):
             return jsonify(user.to_dict())
         else:
             return jsonify({'message': 'User not found'}), 404
+
+
+@auth_ns.route('/forgot-password')
+class ForgotPassword(Resource):
+    @auth_ns.expect(forgot_password_model)
+    def post(self):
+        """Demander une réinitialisation de mot de passe"""
+        try:
+            data = request.get_json()
+            email = data.get('email')
+            
+            if not email:
+                return {'message': 'Email requis'}, 400
+            
+            # Vérifier si l'utilisateur existe
+            user = User.query.filter_by(email=email).first()
+            if not user:
+                # Pour des raisons de sécurité, on retourne toujours le même message
+                return {'message': 'Si cet email existe, un lien de réinitialisation a été envoyé'}, 200
+            
+            # Générer le token de réinitialisation
+            reset_token = user.generate_reset_token()
+            
+            # Envoyer l'email de réinitialisation
+            email_service_instance = EmailService()
+            email_sent = email_service_instance.send_password_reset_email(user.to_dict(), reset_token)
+            
+            return {'message': 'Si cet email existe, un lien de réinitialisation a été envoyé'}, 200
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de l'envoi de l'email de réinitialisation: {str(e)}")
+            return {'message': 'Erreur interne du serveur'}, 500
+
+
+@auth_ns.route('/reset-password')
+class ResetPassword(Resource):
+    @auth_ns.expect(reset_password_model)
+    def post(self):
+        """Réinitialiser le mot de passe avec le token"""
+        try:
+            data = request.get_json()
+            token = data.get('token')
+            new_password = data.get('new_password')
+            
+            if not token or not new_password:
+                return {'message': 'Token et nouveau mot de passe requis'}, 400
+            
+            if len(new_password) < 6:
+                return {'message': 'Le mot de passe doit contenir au moins 6 caractères'}, 400
+            
+            # Vérifier le token
+            user = User.verify_reset_token(token)
+            if not user:
+                return {'message': 'Token invalide ou expiré'}, 400
+            
+            # Mettre à jour le mot de passe
+            user.password = generate_password_hash(new_password)
+            user.clear_reset_token()
+            
+            return {'message': 'Mot de passe réinitialisé avec succès'}, 200
+            
+        except Exception as e:
+            logger.error(f"Erreur lors de la réinitialisation du mot de passe: {str(e)}")
+            return {'message': 'Erreur interne du serveur'}, 500

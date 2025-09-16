@@ -10,17 +10,21 @@ from flask_cors import CORS
 from services.auth.auth import auth_ns
 from services.auth.stripe import stripe_ns
 from services.auth.sync_usages import sync_ns
-from services.crud.manage import recipie_ns
+
 from services.crud.tcf_admin import tcf_ns, create_test_subjects
 from services.crud.tcf_admin_oral import tcf_oral_ns
 from services.exam.exam import exam_ns
 from services.exam.attempt import attempt_ns
 from services.exam.synthesis import synthesis_ns
+from services.exam.dashboard import dashboard_ns
 from services.crud.subscription_pack_admin import pack_ns, create_default_packs
+from services.crud.order_admin import order_admin_ns
+from services.crud.order_public import order_public_ns
 from services.proxy.correction_proxy import proxy_ns
 from services.proxy.translation_proxy import proxy_translation_ns
 from services.proxy.note_moyenne_proxy import proxy_note_moyenne_ns
 from services.proxy.task2_proxy import proxy_task2_ns
+from services.proxy.task1_proxy import proxy_task1_ns
 from services.proxy.oral_proxy import oral_proxy_ns
 
 
@@ -36,7 +40,7 @@ else:
 if os.environ.get('FLASK_ENV') == 'production':
     # Configuration CORS pour la production - domaines spécifiques
     CORS(app, resources={r"/*": {
-        "origins": ["https://mydrtool.com", "https://www.mydrtool.com", "https://api.mydrtool.com"],
+        "origins": ["https://expressiontcf.com", "https://www.expressiontcf.com", "https://api.expressiontcf.com"],
         "methods": ["GET", "POST", "OPTIONS", "PUT", "PATCH", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
         "supports_credentials": True,
@@ -104,11 +108,15 @@ api.add_namespace(tcf_oral_ns)
 api.add_namespace(exam_ns)
 api.add_namespace(attempt_ns)
 api.add_namespace(synthesis_ns)
+api.add_namespace(dashboard_ns)
 api.add_namespace(pack_ns)
+api.add_namespace(order_admin_ns)
+api.add_namespace(order_public_ns)
 api.add_namespace(proxy_ns)
 api.add_namespace(proxy_translation_ns)
 api.add_namespace(proxy_note_moyenne_ns)
 api.add_namespace(proxy_task2_ns)
+api.add_namespace(proxy_task1_ns)
 api.add_namespace(oral_proxy_ns)
 
 
@@ -121,6 +129,8 @@ def initialize_data():
 
 if __name__ == '__main__':
     # Activer le threading pour permettre le traitement concurrent des requêtes
-    app.run(debug=True, port=5001, threaded=True)
+    app.run(debug=True, port=5002, threaded=True)
 else:
     application = app
+#docker build --platform linux/amd64 -f Dockerfile.dev -t reussir-tcf-backend-dev-linux . 
+#ls -lh reussir-tcf-backend-dev-linux.tar && file reussir-tcf-backend-dev-linux.tar
