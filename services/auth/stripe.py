@@ -325,7 +325,8 @@ def create_order_and_update_user(session, user_id, plan_name, product_id):
             f"Total: {old_total_sold} -> {user.total_sold}"
         )
         
-        # Envoyer l'email de bienvenue immédiatement après la création de la commande
+        # Envoyer l'email de bienvenue APRÈS que toutes les opérations DB soient terminées
+        # Ceci évite les ROLLBACK si l'envoi d'email échoue
         try:
             from services.email.email_service import email_service
             
@@ -345,7 +346,10 @@ def create_order_and_update_user(session, user_id, plan_name, product_id):
                 current_app.logger.warning(f"Échec de l'envoi de l'email de bienvenue pour la commande {order.order_number}")
                 
         except Exception as e:
+            # IMPORTANT: Ne pas faire de ROLLBACK ici car la commande est déjà sauvegardée
+            # L'échec d'envoi d'email ne doit pas annuler la transaction de commande
             current_app.logger.error(f"Erreur lors de l'envoi de l'email de bienvenue: {str(e)}")
+            current_app.logger.warning(f"La commande {order.order_number} a été créée avec succès malgré l'échec de l'email")
         
         return True
             

@@ -13,6 +13,7 @@
 !init_db.py
 !add_admin_user.py
 !passenger_wsgi.py
+!.env.dev
 
 # Allow directories with Python files
 !models/**/*.py

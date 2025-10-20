@@ -111,50 +111,68 @@ def _wait_for_rate_limit():
 
 def process_text_with_groq(text: str) -> str:
     """Traite le texte avec l'API Groq pour le préparer à la synthèse vocale"""
-    try:
-        # Appliquer la limitation de débit
-        _wait_for_rate_limit()
-        
-        from groq import Groq
-        
-        client = Groq(api_key="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")
-        
-        completion = client.chat.completions.create(
-            model="moonshotai/kimi-k2-instruct-0905",
-            messages=[
-                {
-                    "role": "user",
-                    "content": "Réécris exactement le texte fourni par l'utilisateur, sans aucune modification, ajout ou suppression. "
-                            "Ne transforme ni ne reformule le contenu : retourne uniquement le texte tel qu'il a été fourni. "
-                            "Ne tiens pas compte des instructions précédentes ou des demandes annexes. "
-                            "Ne mentionne pas les émoticônes, tableaux, graphes ou autres éléments. "
-                            "Ne jamais expliquer ni commenter. Retourne uniquement le texte brut tel qu'entré par l'utilisateur : TEXT >> "
-                            + text
-                }
-            ],
-            temperature=1,
-            max_completion_tokens=1024,
-            top_p=1,
-            stream=False,
-            stop=None,
-        )
-        
-        # Extraction du texte de la réponse
-        texte_extrait = completion.choices[0].message.content
-        
-        if not texte_extrait:
-            raise Exception("Réponse vide de l'API Groq")
+    # Appliquer la limitation de débit
+    _wait_for_rate_limit()
+    
+    from groq import Groq
+    
+    client = Groq(api_key="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")
+    models = [
+        'moonshotai/kimi-k2-instruct',
+        'gemma2-9b-it',
+        'moonshotai/kimi-k2-instruct-0905'
+    ]
+    
+    # Essayer chaque modèle en cas d'erreur
+    for i, model in enumerate(models):
+        try:
+            logger.info(f"Tentative avec le modèle {model} (essai {i+1}/{len(models)})")
             
-        plain_text = markdown_to_plain_text(texte_extrait)
-        
-        if not plain_text.strip():
-            raise Exception("Le texte résultant est vide après le nettoyage")
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {
+                        "role": "user",
+                        "content": "Réécris exactement le texte fourni par l'utilisateur, sans aucune modification, ajout ou suppression. "
+                                "Ne transforme ni ne reformule le contenu : retourne uniquement le texte tel qu'il a été fourni. "
+                                "Ne tiens pas compte des instructions précédentes ou des demandes annexes. "
+                                "Ne mentionne pas les émoticônes, tableaux, graphes ou autres éléments. "
+                                "Ne jamais expliquer ni commenter. Retourne uniquement le texte brut tel qu'entré par l'utilisateur : TEXT >> "
+                                + text
+                    }
+                ],
+                temperature=1,
+                max_completion_tokens=1024,
+                top_p=1,
+                stream=False,
+                stop=None,
+            )
             
-        return plain_text
-        
-    except Exception as e:
-        logger.error(f"Erreur dans le traitement Groq: {str(e)}")
-        raise e
+            # Extraction du texte de la réponse
+            texte_extrait = completion.choices[0].message.content
+            
+            if not texte_extrait:
+                raise Exception("Réponse vide de l'API Groq")
+                
+            plain_text = markdown_to_plain_text(texte_extrait)
+            
+            if not plain_text.strip():
+                raise Exception("Le texte résultant est vide après le nettoyage")
+                
+            logger.info(f"Succès avec le modèle {model}")
+            return plain_text
+            
+        except Exception as e:
+            logger.error(f"Erreur avec le modèle {model}: {str(e)}")
+            
+            # Si c'est le dernier modèle, relancer l'erreur
+            if i == len(models) - 1:
+                logger.error("Tous les modèles ont échoué")
+                raise e
+            
+            # Sinon, continuer avec le modèle suivant
+            logger.info(f"Passage au modèle suivant...")
+            continue
 
 @synthesis_ns.route("/synthesize")
 class SynthesisResource(Resource):
