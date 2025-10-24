@@ -68,7 +68,7 @@ def expired_token_callback(jwt_header, jwt_payload):
 
 @jwt.unauthorized_loader
 def missing_token_callback(error):
-    return {'msg': 'Token d\'autorisation requis'}, 422
+    return {'msg': "Token d'autorisation requis"}, 422
 
 # Gestionnaire d'erreur global pour les erreurs JWT
 @app.errorhandler(422)
@@ -78,6 +78,31 @@ def handle_jwt_exceptions(error):
     return {'msg': 'Erreur de validation'}, 422
 
 db.init_app(app)
+
+# --- Initialisation automatique de la base de données au démarrage ---
+# Crée les tables si elles n'existent pas et insère les données par défaut
+try:
+    from sqlalchemy import inspect
+    with app.app_context():
+        # Importer explicitement les modèles pour l'enregistrement des tables
+        from models.model import User
+        from models.tcf_model import TCFSubject, TCFTask, TCFDocument
+        from models.tcf_exam_model import TCFExam
+        from models.tcf_attempt_model import TCFAttempt
+        from models.tcf_model_oral import TCFOralSubject, TCFOralTask
+
+        inspector = inspect(db.engine)
+        # Créer toutes les tables si aucune n'existe ou pour s'assurer que le schéma est prêt
+        if not inspector.get_table_names():
+            db.create_all()
+        else:
+            # Exécuter create_all de manière sûre (idempotent)
+            db.create_all()
+        # Insérer les données par défaut (les fonctions gèrent déjà les doublons)
+        create_test_subjects()
+        create_default_packs()
+except Exception as e:
+    print(f"[WARN] Initialisation DB non effectuée: {e}")
 
 migrate = Migrate(app, db)
 # Désactiver l'authentification par défaut pour tous les endpoints
