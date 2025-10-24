@@ -147,8 +147,8 @@ with app.app_context():
 "
     
     # Démarrer l'application Flask
-    echo "🚀 Démarrage de l'application Flask sur le port 5001..."
-    exec python3 -m flask run --host=0.0.0.0 --port=5001
+    echo "🚀 Démarrage de l'application Flask sur le port 5002..."
+    exec python3 -m flask run --host=0.0.0.0 --port=5002
 }
 
 # Gestion des signaux pour un arrêt propre

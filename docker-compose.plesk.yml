@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  tcf-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.ubuntu
+    container_name: tcf-backend-plesk
+    environment:
+      - FLASK_ENV=production
+      - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@127.0.0.1:3306/admin_tcf_canada_STZ
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-plesk}
+      - STRIPE_MODE=${STRIPE_MODE:-test}
+      - STRIPE_TEST_SECRET_KEY=${STRIPE_TEST_SECRET_KEY}
+      - STRIPE_LIVE_SECRET_KEY=${STRIPE_LIVE_SECRET_KEY}
+      - STRIPE_TEST_WEBHOOK_SECRET=${STRIPE_TEST_WEBHOOK_SECRET}
+      - STRIPE_LIVE_WEBHOOK_SECRET=${STRIPE_LIVE_WEBHOOK_SECRET}
+    volumes:
+      - ./data:/app/data
+      - ./audio_responses:/app/audio_responses
+    restart: unless-stopped
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:5002/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: ["sh", "-c", "./start-ubuntu.sh"]
