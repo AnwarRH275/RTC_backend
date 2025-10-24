@@ -1,55 +1,28 @@
 version: '3.8'
 
 services:
-  mariadb:
-    image: mariadb:11
-    container_name: tcf-mariadb-dev
-    environment:
-      MYSQL_ROOT_PASSWORD: dev_root_password
-      MYSQL_DATABASE: tcf_canada_dev
-      MYSQL_USER: dev_user
-      MYSQL_PASSWORD: dev_password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mariadb_dev_data:/var/lib/mysql
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pdev_root_password"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-
   tcf-backend:
     build:
       context: .
       dockerfile: Dockerfile.dev
     container_name: tcf-backend-dev
-    ports:
-      - "5001:5001"
     environment:
       - FLASK_ENV=development
-      - DATABASE_URL=mysql+pymysql://dev_user:dev_password@mariadb:3306/tcf_canada_dev
+      - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@127.0.0.1:3306/admin_tcf_canada_STZ
       - SECRET_KEY=dev-secret-key-change-in-production
       - STRIPE_MODE=test
-      - STRIPE_TEST_SECRET_KEY=sk_test_your_key_here
-      - STRIPE_TEST_WEBHOOK_SECRET=whsec_your_webhook_secret_here
+      - STRIPE_TEST_SECRET_KEY=${STRIPE_TEST_SECRET_KEY}
+      - STRIPE_TEST_WEBHOOK_SECRET=${STRIPE_TEST_WEBHOOK_SECRET}
     volumes:
       - ./data:/app/data
       - ./audio_responses:/app/audio_responses
-      - .:/app  # Pour le développement avec hot-reload
-    depends_on:
-      mariadb:
-        condition: service_healthy
+      - .:/app  # hot-reload
     restart: unless-stopped
-    networks:
-      - tcf-dev-network
-    command: ["sh", "-c", "python init_db.py && python migrate_sqlite_to_mariadb.py || true && flask run --host=0.0.0.0 --port=5001 --reload"]
-
-volumes:
-  mariadb_dev_data:
-
-networks:
-  tcf-dev-network:
-    driver: bridge
+    network_mode: "host"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: ["sh", "-c", "python init_db.py && flask run --host=0.0.0.0 --port=5001 --reload"]
