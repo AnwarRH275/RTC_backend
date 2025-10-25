@@ -8,6 +8,7 @@ services:
     container_name: tcf-backend-dev
     ports:
       - "5001:5001"
+    network_mode: "host"
     environment:
       - FLASK_ENV=development
       - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@localhost:3306/admin_tcf_canada_STZ
