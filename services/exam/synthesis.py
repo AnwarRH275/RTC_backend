@@ -67,13 +67,15 @@ async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-DeniseNeural", 
     else:
         audio_filename = f"response_{uuid.uuid4()}.mp3"
     
-    # Créer le dossier audio_responses dans le répertoire backend
-    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    audio_dir = os.path.join(backend_dir, "audio_responses")
+    # Dans le conteneur Docker, le répertoire de travail est /app
+    # Créer le dossier audio_responses directement dans /app
+    audio_dir = "/app/audio_responses"
     os.makedirs(audio_dir, exist_ok=True)
     
     audio_path = os.path.join(audio_dir, audio_filename)
     logger.info(f"EdgeTTS - Chemin du fichier audio: {audio_path}")
+    logger.info(f"EdgeTTS - Répertoire audio existe: {os.path.exists(audio_dir)}")
+    logger.info(f"EdgeTTS - Permissions du répertoire: {oct(os.stat(audio_dir).st_mode)[-3:] if os.path.exists(audio_dir) else 'N/A'}")
 
     try:
         # Vérifier que le texte n'est pas vide
@@ -248,8 +250,8 @@ class AudioFileResource(Resource):
     def get(self, filename):
         """Sert les fichiers audio générés"""
         try:
-            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            audio_dir = os.path.join(backend_dir, "audio_responses")
+            # Utiliser le même chemin que dans synthesize_with_edgetts
+            audio_dir = "/app/audio_responses"
             file_path = os.path.join(audio_dir, filename)
             
             if not os.path.exists(file_path):
@@ -274,8 +276,8 @@ class CleanupAudioFilesResource(Resource):
             if not session_id:
                 return {'error': 'session_id est requis'}, 400
             
-            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            audio_dir = os.path.join(backend_dir, "audio_responses")
+            # Utiliser le même chemin que dans synthesize_with_edgetts
+            audio_dir = "/app/audio_responses"
             
             if not os.path.exists(audio_dir):
                 return {'message': 'Aucun dossier audio à nettoyer', 'deleted_files': 0}
