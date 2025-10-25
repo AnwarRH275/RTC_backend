@@ -19,7 +19,8 @@ services:
       - ./data:/app/data
       - ./audio_responses:/app/audio_responses
       - .:/app  # hot-reload
-    network_mode: "host"
+    extra_hosts:
+      - "127.0.0.1"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/"]
