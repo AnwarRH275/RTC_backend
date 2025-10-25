@@ -57,56 +57,27 @@ def markdown_to_plain_text(md_text: str) -> str:
     plain_text = re.sub(r'\*{1,2}', '', plain_text)
     return plain_text
 
-async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-DeniseNeural", session_id: str = None) -> str:
+async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS"""
-    logger.info(f"EdgeTTS - Début de synthèse. Texte: {len(text)} caractères, Voix: {voice}")
-    logger.debug(f"EdgeTTS - Texte à synthétiser: {text[:100]}...")  # Premiers 100 caractères
-    
     if session_id:
         audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
     else:
         audio_filename = f"response_{uuid.uuid4()}.mp3"
     
-    # Dans le conteneur Docker, le répertoire de travail est /app
-    # Créer le dossier audio_responses directement dans /app
-    audio_dir = "/app/audio_responses"
+    # Créer le dossier audio_responses dans le répertoire backend
+    backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    audio_dir = os.path.join(backend_dir, "audio_responses")
     os.makedirs(audio_dir, exist_ok=True)
     
     audio_path = os.path.join(audio_dir, audio_filename)
-    logger.info(f"EdgeTTS - Chemin du fichier audio: {audio_path}")
-    logger.info(f"EdgeTTS - Répertoire audio existe: {os.path.exists(audio_dir)}")
-    logger.info(f"EdgeTTS - Permissions du répertoire: {oct(os.stat(audio_dir).st_mode)[-3:] if os.path.exists(audio_dir) else 'N/A'}")
 
     try:
-        # Vérifier que le texte n'est pas vide
-        if not text or not text.strip():
-            logger.error("EdgeTTS - Le texte est vide ou ne contient que des espaces")
-            return ""
-        
-        logger.info(f"EdgeTTS - Création de l'objet Communicate avec voix: {voice}")
         communicate = edge_tts.Communicate(text, voice)
-        
-        logger.info("EdgeTTS - Début de la sauvegarde du fichier audio")
         await communicate.save(audio_path)
-        
-        # Vérifier que le fichier a été créé et n'est pas vide
-        if os.path.exists(audio_path):
-            file_size = os.path.getsize(audio_path)
-            logger.info(f"EdgeTTS - Fichier créé avec succès: {audio_filename}, Taille: {file_size} octets")
-            
-            if file_size == 0:
-                logger.error("EdgeTTS - Le fichier audio créé est vide")
-                return ""
-            
-            return audio_filename
-        else:
-            logger.error("EdgeTTS - Le fichier audio n'a pas été créé")
-            return ""
-            
+        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
+        return audio_filename
     except Exception as e:
         logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {e}")
-        logger.error(f"EdgeTTS - Type d'erreur: {type(e).__name__}")
-        logger.error(f"EdgeTTS - Détails de l'erreur: {str(e)}")
         return ""
 
 # Variables globales pour le rate limiting
@@ -250,8 +221,8 @@ class AudioFileResource(Resource):
     def get(self, filename):
         """Sert les fichiers audio générés"""
         try:
-            # Utiliser le même chemin que dans synthesize_with_edgetts
-            audio_dir = "/app/audio_responses"
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            audio_dir = os.path.join(backend_dir, "audio_responses")
             file_path = os.path.join(audio_dir, filename)
             
             if not os.path.exists(file_path):
@@ -276,8 +247,8 @@ class CleanupAudioFilesResource(Resource):
             if not session_id:
                 return {'error': 'session_id est requis'}, 400
             
-            # Utiliser le même chemin que dans synthesize_with_edgetts
-            audio_dir = "/app/audio_responses"
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            audio_dir = os.path.join(backend_dir, "audio_responses")
             
             if not os.path.exists(audio_dir):
                 return {'message': 'Aucun dossier audio à nettoyer', 'deleted_files': 0}

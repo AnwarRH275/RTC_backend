@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copier tout le code source après installation des dépendances
 COPY . .
 
-# Copier le fichier d'environnement de développement
-COPY .env.dev .env
+# Copier l'environnement Docker (DB sur hôte)
+COPY .env.docker .env
 
 # Variables d'environnement pour le mode développement
 ENV FLASK_APP=app.py
