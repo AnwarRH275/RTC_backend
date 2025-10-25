@@ -31,8 +31,8 @@ class Config:
 
 class DevConfig(Config):
     # Permet d'utiliser DATABASE_URL si présent, sinon on retombe sur SQLite dev.db
-    #SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'dev.db'))
-    SQLALCHEMY_DATABASE_URI = "sqlite:///"+os.path.join(BASE_DIR, 'dev.db')
+    SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'dev.db'))
+    #SQLALCHEMY_DATABASE_URI = "sqlite:///"+os.path.join(BASE_DIR, 'dev.db')
     DEBUG = True
     SQLALCHEMY_ECHO = True
 
