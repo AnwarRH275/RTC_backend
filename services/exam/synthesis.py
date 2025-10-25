@@ -59,6 +59,9 @@ def markdown_to_plain_text(md_text: str) -> str:
 
 async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS"""
+    logger.info(f"EdgeTTS - Début de synthèse. Texte: {len(text)} caractères, Voix: {voice}")
+    logger.debug(f"EdgeTTS - Texte à synthétiser: {text[:100]}...")  # Premiers 100 caractères
+    
     if session_id:
         audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
     else:
@@ -70,14 +73,38 @@ async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Spee
     os.makedirs(audio_dir, exist_ok=True)
     
     audio_path = os.path.join(audio_dir, audio_filename)
+    logger.info(f"EdgeTTS - Chemin du fichier audio: {audio_path}")
 
     try:
+        # Vérifier que le texte n'est pas vide
+        if not text or not text.strip():
+            logger.error("EdgeTTS - Le texte est vide ou ne contient que des espaces")
+            return ""
+        
+        logger.info(f"EdgeTTS - Création de l'objet Communicate avec voix: {voice}")
         communicate = edge_tts.Communicate(text, voice)
+        
+        logger.info("EdgeTTS - Début de la sauvegarde du fichier audio")
         await communicate.save(audio_path)
-        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
-        return audio_filename
+        
+        # Vérifier que le fichier a été créé et n'est pas vide
+        if os.path.exists(audio_path):
+            file_size = os.path.getsize(audio_path)
+            logger.info(f"EdgeTTS - Fichier créé avec succès: {audio_filename}, Taille: {file_size} octets")
+            
+            if file_size == 0:
+                logger.error("EdgeTTS - Le fichier audio créé est vide")
+                return ""
+            
+            return audio_filename
+        else:
+            logger.error("EdgeTTS - Le fichier audio n'a pas été créé")
+            return ""
+            
     except Exception as e:
         logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {e}")
+        logger.error(f"EdgeTTS - Type d'erreur: {type(e).__name__}")
+        logger.error(f"EdgeTTS - Détails de l'erreur: {str(e)}")
         return ""
 
 # Variables globales pour le rate limiting
