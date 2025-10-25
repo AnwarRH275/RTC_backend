@@ -57,7 +57,7 @@ def markdown_to_plain_text(md_text: str) -> str:
     plain_text = re.sub(r'\*{1,2}', '', plain_text)
     return plain_text
 
-async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
+async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-DeniseNeural", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS"""
     logger.info(f"EdgeTTS - Début de synthèse. Texte: {len(text)} caractères, Voix: {voice}")
     logger.debug(f"EdgeTTS - Texte à synthétiser: {text[:100]}...")  # Premiers 100 caractères
