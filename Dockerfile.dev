@@ -1,4 +1,4 @@
-FROM python:3.9-slim
+FROM python:3.12.3-slim
 
 # Définir le dossier de travail
 WORKDIR /app
@@ -17,8 +17,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copier tout le code source après installation des dépendances
 COPY . .
 
-# Copier l'environnement Docker (DB sur hôte)
-COPY .env.docker .env
+# Copier le fichier d'environnement de développement
+COPY .env.dev .env
 
 # Variables d'environnement pour le mode développement
 ENV FLASK_APP=app.py

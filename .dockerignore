@@ -14,7 +14,6 @@
 !add_admin_user.py
 !passenger_wsgi.py
 !.env.dev
-!.env.docker
 
 # Allow directories with Python files
 !models/**/*.py
