@@ -7,19 +7,12 @@ services:
       dockerfile: Dockerfile.dev
     container_name: tcf-backend-dev
     network_mode: "host"
+    env_file:
+      - .env.dev
+      - .env.proxy
     environment:
       - FLASK_DEBUG=1
       - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@localhost:3306/admin_tcf_canada_STZ
-      - SECRET_KEY=dev-secret-key-change-in-production
-      - STRIPE_MODE=test
-      - STRIPE_TEST_SECRET_KEY=${STRIPE_TEST_SECRET_KEY}
-      - STRIPE_TEST_WEBHOOK_SECRET=${STRIPE_TEST_WEBHOOK_SECRET}
-      - HTTP_PROXY=${HTTP_PROXY}
-      - HTTPS_PROXY=${HTTPS_PROXY}
-      - NO_PROXY=${NO_PROXY}
-      - EDGE_TTS_PROXY=${EDGE_TTS_PROXY}
-      - SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
-      - REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
     ports:
       - "5001:5001"
     volumes:

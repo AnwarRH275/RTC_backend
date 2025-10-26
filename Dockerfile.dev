@@ -25,7 +25,7 @@ COPY .env.dev .env
 
 # Variables d'environnement pour le mode développement
 ENV FLASK_APP=app.py
-ENV FLASK_ENV=development
+ENV FLASK_DEBUG=1
 ENV PYTHONUNBUFFERED=1
 
 # Exposer le port utilisé par l'appli
