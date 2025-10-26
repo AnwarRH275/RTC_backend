@@ -8,8 +8,11 @@ RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
+    libmariadb-dev \
+    pkg-config \
     ca-certificates \
     curl \
+    default-libmysqlclient-dev \
  && update-ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 

@@ -80,13 +80,17 @@ def _normalize_voice(voice: Optional[str]) -> str:
     return default
 
 async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", session_id: str = None) -> str:
-    """Synthétise le texte en audio avec EdgeTTS"""
-    if session_id:
-        audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
-    else:
-        audio_filename = f"response_{uuid.uuid4()}.mp3"
+    """Synthèse vocale avec EdgeTTS"""
+    if not text or not text.strip():
+        logger.warning("Texte vide fourni pour la synthèse EdgeTTS")
+        return ""
     
-    # Créer le dossier audio_responses dans le répertoire backend
+    # Nettoyer le texte
+    text = text.strip()
+    if len(text) > 1000:
+        text = text[:1000]  # Limiter la longueur
+    
+    audio_filename = f"audio_{uuid.uuid4().hex}.mp3"
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     audio_dir = os.path.join(backend_dir, "audio_responses")
     os.makedirs(audio_dir, exist_ok=True)
@@ -95,20 +99,40 @@ async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", s
 
     proxy_url = _get_proxy_url()
     normalized_voice = _normalize_voice(voice)
+    
+    # Configuration EdgeTTS depuis les variables d'environnement
+    rate = os.getenv('EDGE_TTS_RATE', '+0%')
+    volume = os.getenv('EDGE_TTS_VOLUME', '+0%')
 
     try:
+        # Tenter avec proxy si disponible
         try:
-            communicate = edge_tts.Communicate(text, normalized_voice, proxy=proxy_url) if proxy_url else edge_tts.Communicate(text, normalized_voice)
+            if proxy_url:
+                communicate = edge_tts.Communicate(text, normalized_voice, rate=rate, volume=volume, proxy=proxy_url)
+            else:
+                communicate = edge_tts.Communicate(text, normalized_voice, rate=rate, volume=volume)
         except TypeError:
-            # Certaines versions de edge-tts ne supportent pas le paramètre proxy
+            # Fallback pour les versions plus anciennes d'edge-tts
             communicate = edge_tts.Communicate(text, normalized_voice)
             if proxy_url:
-                logger.warning("edge_tts.Communicate ne supporte pas le paramètre 'proxy' dans cette version; utilisation des variables d'environnement HTTP(S)_PROXY si supportées par aiohttp.")
-        await communicate.save(audio_path)
-        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
-        return audio_filename
+                logger.warning("edge_tts.Communicate ne supporte pas le paramètre 'proxy' dans cette version")
+        
+        # Sauvegarder l'audio avec timeout
+        await asyncio.wait_for(communicate.save(audio_path), timeout=30.0)
+        
+        # Vérifier que le fichier a été créé et n'est pas vide
+        if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
+            logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
+            return audio_filename
+        else:
+            logger.error(f"Fichier audio vide ou non créé: {audio_path}")
+            return ""
+            
+    except asyncio.TimeoutError:
+        logger.error("Timeout lors de la synthèse EdgeTTS (30s)")
+        return ""
     except Exception as e:
-        logger.error("Erreur lors de la synthèse vocale avec EdgeTTS", exc_info=True)
+        logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {str(e)}", exc_info=True)
         return ""
 
 # Variables globales pour le rate limiting
