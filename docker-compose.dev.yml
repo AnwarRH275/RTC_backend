@@ -1,29 +1,66 @@
-version: '3.8'
-
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: tcf-mysql-dev
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: admin_tcf_canada_STZ
+      MYSQL_USER: admin_tcf_canada_STZ
+      MYSQL_PASSWORD: admin_tcf_canada_STZ
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+    command: --default-authentication-plugin=mysql_native_password
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: tcf-phpmyadmin-dev
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_USER: admin_tcf_canada_STZ
+      PMA_PASSWORD: admin_tcf_canada_STZ
+      MYSQL_ROOT_PASSWORD: root_password
+    ports:
+      - "8080:80"
+    depends_on:
+      - mysql
+    restart: unless-stopped
+
   tcf-backend:
     build:
       context: .
       dockerfile: Dockerfile.dev
     container_name: tcf-backend-dev
-    network_mode: "host"
+    environment:
+      - FLASK_DEBUG=1
+      - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@mysql:3306/admin_tcf_canada_STZ
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - STRIPE_MODE=test
+      - STRIPE_TEST_SECRET_KEY=${STRIPE_TEST_SECRET_KEY}
+      - STRIPE_TEST_WEBHOOK_SECRET=${STRIPE_TEST_WEBHOOK_SECRET}
     env_file:
       - .env.dev
       - .env.proxy
-    environment:
-      - FLASK_DEBUG=1
-      - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@localhost:3306/admin_tcf_canada_STZ
     ports:
       - "5001:5001"
     volumes:
       - ./data:/app/data
       - ./audio_responses:/app/audio_responses
       - .:/app  # hot-reload
+    depends_on:
+      - mysql
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:5001/"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 40s
-    command: ["sh", "-c", "python init_db.py && flask run --host=0.0.0.0 --port=5001 --reload"]
+      start_period: 60s
+    command: ["sh", "-c", "sleep 30 && python migrate_and_init.py && flask run --host=0.0.0.0 --port=5001 --reload"]
+
+volumes:
+  mysql_data:

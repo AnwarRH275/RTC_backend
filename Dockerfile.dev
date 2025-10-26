@@ -10,11 +10,11 @@ RUN apt-get update && apt-get install -y \
     libpq-dev \
     libmariadb-dev \
     pkg-config \
+    default-libmysqlclient-dev \
     ca-certificates \
     curl \
-    default-libmysqlclient-dev \
- && update-ca-certificates \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && update-ca-certificates
 
 # Copier les dépendances Python et les installer
 COPY requirements.txt .

@@ -15,7 +15,6 @@ from flask_cors import cross_origin
 from bs4 import BeautifulSoup
 import markdown
 import requests
-from typing import Optional
 # from flask_jwt_extended import jwt_required  # Supprimé car non utilisé
 
 # Configuration du logging
@@ -58,81 +57,27 @@ def markdown_to_plain_text(md_text: str) -> str:
     plain_text = re.sub(r'\*{1,2}', '', plain_text)
     return plain_text
 
-def _get_proxy_url() -> Optional[str]:
-    """Return proxy URL from environment variables if defined."""
-    return os.getenv("EDGE_TTS_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
-
-def _normalize_voice(voice: Optional[str]) -> str:
-    """Convertit un nom de voix Azure long en ShortName EdgeTTS et applique un fallback fr-FR."""
-    default = "fr-FR-HenriNeural"
-    if not voice:
-        return default
-    v = voice.strip()
-    # Déjà au format court
-    if re.match(r"^[a-z]{2}-[A-Z]{2}-[A-Za-z]+Neural$", v):
-        return v
-    # Format long: "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)"
-    if "(" in v and ")" in v:
-        inside = v[v.find("(") + 1:v.find(")")]
-        parts = [p.strip() for p in inside.split(",")]
-        if len(parts) == 2:
-            return f"{parts[0]}-{parts[1]}"
-    return default
-
-async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", session_id: str = None) -> str:
-    """Synthèse vocale avec EdgeTTS"""
-    if not text or not text.strip():
-        logger.warning("Texte vide fourni pour la synthèse EdgeTTS")
-        return ""
+async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
+    """Synthétise le texte en audio avec EdgeTTS"""
+    if session_id:
+        audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
+    else:
+        audio_filename = f"response_{uuid.uuid4()}.mp3"
     
-    # Nettoyer le texte
-    text = text.strip()
-    if len(text) > 1000:
-        text = text[:1000]  # Limiter la longueur
-    
-    audio_filename = f"audio_{uuid.uuid4().hex}.mp3"
+    # Créer le dossier audio_responses dans le répertoire backend
     backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     audio_dir = os.path.join(backend_dir, "audio_responses")
     os.makedirs(audio_dir, exist_ok=True)
     
     audio_path = os.path.join(audio_dir, audio_filename)
 
-    proxy_url = _get_proxy_url()
-    normalized_voice = _normalize_voice(voice)
-    
-    # Configuration EdgeTTS depuis les variables d'environnement
-    rate = os.getenv('EDGE_TTS_RATE', '+0%')
-    volume = os.getenv('EDGE_TTS_VOLUME', '+0%')
-
     try:
-        # Tenter avec proxy si disponible
-        try:
-            if proxy_url:
-                communicate = edge_tts.Communicate(text, normalized_voice, rate=rate, volume=volume, proxy=proxy_url)
-            else:
-                communicate = edge_tts.Communicate(text, normalized_voice, rate=rate, volume=volume)
-        except TypeError:
-            # Fallback pour les versions plus anciennes d'edge-tts
-            communicate = edge_tts.Communicate(text, normalized_voice)
-            if proxy_url:
-                logger.warning("edge_tts.Communicate ne supporte pas le paramètre 'proxy' dans cette version")
-        
-        # Sauvegarder l'audio avec timeout
-        await asyncio.wait_for(communicate.save(audio_path), timeout=30.0)
-        
-        # Vérifier que le fichier a été créé et n'est pas vide
-        if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
-            logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
-            return audio_filename
-        else:
-            logger.error(f"Fichier audio vide ou non créé: {audio_path}")
-            return ""
-            
-    except asyncio.TimeoutError:
-        logger.error("Timeout lors de la synthèse EdgeTTS (30s)")
-        return ""
+        communicate = edge_tts.Communicate(text, voice)
+        await communicate.save(audio_path)
+        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
+        return audio_filename
     except Exception as e:
-        logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {str(e)}", exc_info=True)
+        logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {e}")
         return ""
 
 # Variables globales pour le rate limiting
@@ -236,9 +181,8 @@ class SynthesisResource(Resource):
     def post(self):
         """Convertit le texte en audio"""
         try:
-            data = request.get_json() or {}
-            text = str(data.get('text', '') or '')
-            voice = data.get('voice')
+            data = request.get_json()
+            text = data.get('text', '')
             session_id = data.get('session_id')
             
             if not text.strip():
@@ -250,13 +194,16 @@ class SynthesisResource(Resource):
             # Synthétiser avec EdgeTTS
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            audio_filename = loop.run_until_complete(synthesize_with_edgetts(processed_text, voice=voice, session_id=session_id))
+            audio_filename = loop.run_until_complete(synthesize_with_edgetts(processed_text, session_id=session_id))
             loop.close()
             
             if audio_filename:
-                # Construire l'URL dynamiquement
-                base_url = os.getenv('URL_BACKEND') or request.url_root.rstrip('/')
+                # Construire l'URL dynamiquement basée sur la requête
+                base_url = os.getenv('URL_BACKEND')
+                print(base_url)
+                print(base_url)
                 audio_url = f"{base_url}/synthesis/audio_responses/{audio_filename}"
+                print(audio_url)
                 return {
                     "audio_url": audio_url,
                     "filename": audio_filename
@@ -265,7 +212,7 @@ class SynthesisResource(Resource):
                 return {'error': 'Erreur lors de la synthèse vocale'}, 500
                 
         except Exception as e:
-            logger.error("Erreur dans l'endpoint /synthesize", exc_info=True)
+            logger.error(f"Erreur dans l'endpoint /synthesize: {str(e)}", exc_info=True)
             return {'error': 'Erreur interne du serveur'}, 500
 
 @synthesis_ns.route("/audio_responses/<string:filename>")
@@ -333,31 +280,3 @@ class CleanupAudioFilesResource(Resource):
         except Exception as e:
             logger.error(f"Erreur lors du nettoyage des fichiers audio: {str(e)}")
             return {'error': 'Erreur lors du nettoyage des fichiers audio'}, 500
-
-@synthesis_ns.route("/voices")
-class VoicesResource(Resource):
-    @cross_origin()
-    def get(self):
-        """Liste les voix disponibles (filtrées sur fr-*) pour diagnostic."""
-        proxy_url = _get_proxy_url()
-        async def _list(proxy_url: Optional[str]):
-            try:
-                if proxy_url:
-                    try:
-                        return await edge_tts.list_voices(proxy=proxy_url)
-                    except TypeError:
-                        return await edge_tts.list_voices()
-                else:
-                    return await edge_tts.list_voices()
-            except Exception as e:
-                logger.error("Erreur lors de la récupération des voix EdgeTTS", exc_info=True)
-                return []
-
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            voices = loop.run_until_complete(_list(proxy_url))
-        finally:
-            loop.close()
-        fr_voices = [v for v in voices if str(v.get("Locale", "")).startswith("fr-")]
-        return {"count": len(fr_voices), "voices": fr_voices}
