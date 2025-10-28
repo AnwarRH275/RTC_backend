@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Copier le fichier d'environnement de développement
-COPY env.dev .env
+COPY .env.dev .env
 
 # Variables d'environnement pour le mode développement
 ENV FLASK_APP=app.py
