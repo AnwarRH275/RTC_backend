@@ -59,6 +59,23 @@ def markdown_to_plain_text(md_text: str) -> str:
 
 async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS"""
+    
+    # Validation du texte d'entrée
+    if not text or not text.strip():
+        logger.error("Erreur lors de la synthèse vocale avec EdgeTTS: Texte vide ou ne contenant que des espaces")
+        return ""
+    
+    # Nettoyer le texte (supprimer les espaces en début/fin)
+    clean_text = text.strip()
+    
+    # Vérifier que le texte nettoyé n'est pas vide
+    if not clean_text:
+        logger.error("Erreur lors de la synthèse vocale avec EdgeTTS: Texte vide après nettoyage")
+        return ""
+    
+    # Log pour debug
+    logger.info(f"Synthèse EdgeTTS - Texte: '{clean_text[:100]}{'...' if len(clean_text) > 100 else ''}' (longueur: {len(clean_text)})")
+    
     if session_id:
         audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
     else:
@@ -72,10 +89,23 @@ async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Spee
     audio_path = os.path.join(audio_dir, audio_filename)
 
     try:
-        communicate = edge_tts.Communicate(text, voice)
+        communicate = edge_tts.Communicate(clean_text, voice)
         await communicate.save(audio_path)
-        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
-        return audio_filename
+        
+        # Vérifier que le fichier audio a été créé et n'est pas vide
+        if os.path.exists(audio_path):
+            file_size = os.path.getsize(audio_path)
+            if file_size == 0:
+                logger.error("Erreur lors de la synthèse vocale avec EdgeTTS: No audio was received. Please verify that your parameters are correct.")
+                os.remove(audio_path)  # Supprimer le fichier vide
+                return ""
+            else:
+                logger.info(f"Audio généré avec EdgeTTS: {audio_filename} (taille: {file_size} bytes)")
+                return audio_filename
+        else:
+            logger.error("Erreur lors de la synthèse vocale avec EdgeTTS: No audio was received. Please verify that your parameters are correct.")
+            return ""
+            
     except Exception as e:
         logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {e}")
         return ""
@@ -111,6 +141,12 @@ def _wait_for_rate_limit():
 
 def process_text_with_groq(text: str) -> str:
     """Traite le texte avec l'API Groq pour le préparer à la synthèse vocale"""
+    
+    # Validation du texte d'entrée
+    if not text or not text.strip():
+        logger.error("Texte d'entrée vide pour process_text_with_groq")
+        return text  # Retourner le texte original même s'il est vide
+    
     # Appliquer la limitation de débit
     _wait_for_rate_limit()
     
@@ -152,23 +188,26 @@ def process_text_with_groq(text: str) -> str:
             texte_extrait = completion.choices[0].message.content
             
             if not texte_extrait:
-                raise Exception("Réponse vide de l'API Groq")
+                logger.warning("Réponse vide de l'API Groq, retour du texte original")
+                return text
                 
             plain_text = markdown_to_plain_text(texte_extrait)
             
             if not plain_text.strip():
-                raise Exception("Le texte résultant est vide après le nettoyage")
+                logger.warning("Le texte résultant est vide après le nettoyage, retour du texte original")
+                return text
                 
             logger.info(f"Succès avec le modèle {model}")
+            logger.info(f"Texte traité par Groq: '{plain_text[:100]}{'...' if len(plain_text) > 100 else ''}' (longueur: {len(plain_text)})")
             return plain_text
             
         except Exception as e:
             logger.error(f"Erreur avec le modèle {model}: {str(e)}")
             
-            # Si c'est le dernier modèle, relancer l'erreur
+            # Si c'est le dernier modèle, retourner le texte original au lieu de lever une erreur
             if i == len(models) - 1:
-                logger.error("Tous les modèles ont échoué")
-                raise e
+                logger.error("Tous les modèles ont échoué, retour du texte original")
+                return text
             
             # Sinon, continuer avec le modèle suivant
             logger.info(f"Passage au modèle suivant...")
