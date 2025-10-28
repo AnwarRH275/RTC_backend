@@ -1,47 +1,32 @@
-FROM python:3.13.9-slim
+FROM python:3.12.3-slim
 
 # Définir le dossier de travail
 WORKDIR /app
 
-# Installer les dépendances système minimales pour EdgeTTS
+# Installer les dépendances système nécessaires pour le dev
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     libpq-dev \
-    ca-certificates \
-    ffmpeg \
-    espeak-ng \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf /tmp/* \
-    && rm -rf /var/tmp/*
+    && rm -rf /var/lib/apt/lists/*
 
 # Copier les dépendances Python et les installer
 COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
-
-# Vérifier que EdgeTTS fonctionne
-RUN python -c "import edge_tts; print('EdgeTTS installé avec succès')"
-
-# Créer les dossiers nécessaires
-RUN mkdir -p /app/audio_responses /app/data
 
 # Copier tout le code source après installation des dépendances
 COPY . .
 
 # Copier le fichier d'environnement de développement
-COPY .env.dev .env
+COPY env.dev .env
 
 # Variables d'environnement pour le mode développement
 ENV FLASK_APP=app.py
 ENV FLASK_ENV=development
 ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-ENV EDGE_VOICE=fr-FR-HenriNeural
 
 # Exposer le port utilisé par l'appli
 EXPOSE 5001
 
-# Commande par défaut
-CMD ["sh", "-c", "python init_db.py && python app.py"]
+# Initialiser la base de données et lancer le serveur
+CMD ["sh", "-c", "python init_db.py && flask run --host=0.0.0.0 --port=5001"]
