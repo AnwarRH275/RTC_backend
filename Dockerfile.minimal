@@ -1,0 +1,38 @@
+# Dockerfile minimal pour Plesk
+FROM python:3.13.9-alpine
+
+# Définir le répertoire de travail
+WORKDIR /app
+
+# Installer uniquement les dépendances système essentielles
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    postgresql-dev \
+    && rm -rf /var/cache/apk/*
+
+# Copier et installer les dépendances Python
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    rm -rf ~/.cache/pip
+
+# Vérifier EdgeTTS
+RUN python -c "import edge_tts; print('EdgeTTS installé avec succès')"
+
+# Créer les dossiers nécessaires
+RUN mkdir -p /app/audio_responses /app/data
+
+# Copier les fichiers de l'application
+COPY . .
+COPY .env.dev .env
+
+# Variables d'environnement
+ENV PYTHONPATH=/app
+ENV EDGE_VOICE=fr-FR-DeniseNeural
+
+# Exposer le port
+EXPOSE 5001
+
+# Commande par défaut
+CMD ["sh", "-c", "python init_db.py && python app.py"]

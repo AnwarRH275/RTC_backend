@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Base de données MariaDB
+  mariadb:
+    image: mariadb:10.6.22-jammy
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    container_name: tcf-mariadb-dev
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: 'admin_tcf_canada_STZ'
+      MYSQL_USER: 'admin_tcf_canada_STZ'
+      MYSQL_PASSWORD: 'admin_tcf_canada_STZ'
+      MYSQL_ROOT_PASSWORD: 'admin_tcf_canada_STZ'
+    ports:
+      - '3306:3306'
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - tcf-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin_tcf_canada_STZ"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # phpMyAdmin pour la gestion de la base de données
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin:latest
+    container_name: tcf-phpmyadmin-dev
+    restart: unless-stopped
+    ports:
+      - '8080:80'
+    environment:
+      PMA_HOST: mariadb
+      PMA_USER: root
+      PMA_PASSWORD: 'admin_tcf_canada_STZ'
+      PMA_ARBITRARY: 1
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - tcf-network
+
+  # Application Backend TCF
+  tcf-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: tcf-backend-dev
+    ports:
+      - '5001:5001'
+    environment:
+      - FLASK_ENV=development
+      - DATABASE_URL=mysql+pymysql://admin_tcf_canada_STZ:admin_tcf_canada_STZ@mariadb:3306/admin_tcf_canada_STZ
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - STRIPE_MODE=test
+      - STRIPE_TEST_SECRET_KEY=${STRIPE_TEST_SECRET_KEY}
+      - STRIPE_TEST_WEBHOOK_SECRET=${STRIPE_TEST_WEBHOOK_SECRET}
+    volumes:
+      - ./data:/app/data
+      - ./audio_responses:/app/audio_responses
+      - .:/app  # hot-reload pour le développement
+    restart: unless-stopped
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    networks:
+      - tcf-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  mariadb_data:
+    driver: local
+
+networks:
+  tcf-network:
+    driver: bridge
