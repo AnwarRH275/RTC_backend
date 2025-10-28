@@ -116,7 +116,7 @@ def process_text_with_groq(text: str) -> str:
     
     from groq import Groq
     
-    client = Groq(api_key="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")
+    client = Groq(api_key="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")
     models = [
         'moonshotai/kimi-k2-instruct',
         'gemma2-9b-it',
