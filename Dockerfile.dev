@@ -1,38 +1,78 @@
-FROM python:3.12.3-slim
+# Dockerfile.dev - Environnement de développement pour TCF Canada Backend
+# Simule exactement l'environnement localhost pour Edge TTS et autres services
 
-# Définir le dossier de travail
-WORKDIR /app
+FROM python:3.11-slim-bullseye
 
-# Installer les dépendances système nécessaires pour le dev
-RUN apt-get update && apt-get install -y \
+# Métadonnées
+LABEL maintainer="support@reussir-tcfcanada.com"
+LABEL description="Backend TCF Canada - Environnement de développement avec simulation localhost"
+LABEL version="1.0"
+
+# Variables d'environnement pour Python et Flask
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    FLASK_ENV=development \
+    FLASK_DEBUG=1 \
+    PORT=5001 \
+    PYTHONIOENCODING=utf-8 \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8
+
+# Installation des dépendances système nécessaires
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
-    libpq-dev \
+    make \
     libmariadb-dev \
+    libmariadb-dev-compat \
     pkg-config \
     default-libmysqlclient-dev \
-    ca-certificates \
     curl \
-    && rm -rf /var/lib/apt/lists/* \
-    && update-ca-certificates
+    wget \
+    git \
+    ca-certificates \
+    openssl \
+    libssl-dev \
+    && update-ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copier les dépendances Python et les installer
+# Créer le répertoire de travail
+WORKDIR /app
+
+# Copier les fichiers de dépendances en premier (meilleure mise en cache)
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Copier tout le code source après installation des dépendances
+# Installer les dépendances Python
+RUN pip install --upgrade pip setuptools wheel && \
+    pip install --no-cache-dir -r requirements.txt
+
+# Copier tous les fichiers de l'application
 COPY . .
 
-# Copier le fichier d'environnement de développement
-COPY .env.dev .env
+# Créer les répertoires nécessaires
+RUN mkdir -p /app/audio_responses \
+    /app/instance \
+    /app/tmp \
+    /app/data \
+    /app/migrations/versions
 
-# Variables d'environnement pour le mode développement
-ENV FLASK_APP=app.py
-ENV FLASK_DEBUG=1
-ENV PYTHONUNBUFFERED=1
+# Permissions pour les répertoires de données
+RUN chmod -R 755 /app/audio_responses \
+    /app/instance \
+    /app/tmp \
+    /app/data
 
-# Exposer le port utilisé par l'appli
+# Copier le fichier .env.dev comme fichier .env par défaut
+RUN if [ -f .env.dev ]; then cp .env.dev .env; fi
+
+# Exposer le port de l'application
 EXPOSE 5001
 
-# Initialiser la base de données et lancer le serveur
-CMD ["sh", "-c", "python init_db.py && flask run --host=0.0.0.0 --port=5001"]
+# Healthcheck pour vérifier que l'application est disponible
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:5001/docs || exit 1
+
+# Script d'initialisation et démarrage
+CMD ["python", "app.py"]

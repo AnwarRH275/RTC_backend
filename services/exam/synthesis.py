@@ -8,13 +8,14 @@ import re
 from collections import deque
 from threading import Lock
 from flask_restx import Resource, Namespace, fields
-from flask import request, send_file
+from flask import request, send_file, current_app
 from pydantic import BaseModel
 import edge_tts
 from flask_cors import cross_origin
 from bs4 import BeautifulSoup
 import markdown
 import requests
+import base64
 # from flask_jwt_extended import jwt_required  # Supprimé car non utilisé
 
 # Configuration du logging
@@ -57,8 +58,30 @@ def markdown_to_plain_text(md_text: str) -> str:
     plain_text = re.sub(r'\*{1,2}', '', plain_text)
     return plain_text
 
-async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Speech Text to Speech Voice (fr-FR, HenriNeural)", session_id: str = None) -> str:
-    """Synthétise le texte en audio avec EdgeTTS"""
+VOICE_CANDIDATES = [
+    "fr-FR-HenriNeural",
+    "fr-FR-DeniseNeural",
+    "fr-FR-AlainNeural",
+    "fr-FR-BrigitteNeural",
+    "fr-CA-SylvieNeural",
+    "fr-CA-JeanNeural",
+]
+
+# MP3 silencieux (≈1s) encodé en base64 pour le mode simulation
+SILENT_MP3_BASE64 = (
+    "SUQzAwAAAAAAJAAAAGZyZWUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/7QAAfQAAAwAAAAEAAACQAAACAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQAAH0AAADAAAABAAAAJAAAAgAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+)
+
+async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", session_id: str = None) -> str:
+    """Synthétise le texte en audio avec EdgeTTS.
+    Corrige la voix par défaut (format attendu par edge-tts) et essaie des voix de repli.
+    """
     if session_id:
         audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
     else:
@@ -71,14 +94,21 @@ async def synthesize_with_edgetts(text: str, voice: str = "Microsoft Server Spee
     
     audio_path = os.path.join(audio_dir, audio_filename)
 
-    try:
-        communicate = edge_tts.Communicate(text, voice)
-        await communicate.save(audio_path)
-        logger.info(f"Audio généré avec EdgeTTS: {audio_filename}")
-        return audio_filename
-    except Exception as e:
-        logger.error(f"Erreur lors de la synthèse vocale avec EdgeTTS: {e}")
-        return ""
+    # Liste des voix à tester (voix demandée en premier)
+    voices_to_try = [voice] + [v for v in VOICE_CANDIDATES if v != voice]
+
+    for v in voices_to_try:
+        try:
+            communicate = edge_tts.Communicate(text, v)
+            await communicate.save(audio_path)
+            logger.info(f"Audio généré avec EdgeTTS: {audio_filename} (voice={v})")
+            return audio_filename
+        except Exception as e:
+            logger.error(f"Erreur EdgeTTS avec la voix {v}: {e}")
+            continue
+
+    logger.error("Échec EdgeTTS: aucune voix n'a réussi à générer l'audio")
+    return ""
 
 # Variables globales pour le rate limiting
 _groq_request_times = deque()
@@ -116,7 +146,9 @@ def process_text_with_groq(text: str) -> str:
     
     from groq import Groq
     
-    client = Groq(api_key="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")
+    # Récupère la clé depuis l'ENV si disponible, sinon utilise la nouvelle valeur fournie
+    groq_api_key = os.environ.get("GROQ_API_KEY", "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")
+    client = Groq(api_key=groq_api_key)
     models = [
         'moonshotai/kimi-k2-instruct',
         'gemma2-9b-it',
@@ -184,10 +216,33 @@ class SynthesisResource(Resource):
             data = request.get_json()
             text = data.get('text', '')
             session_id = data.get('session_id')
-            
+
             if not text.strip():
                 return {'error': 'Le texte ne peut pas être vide'}, 400
-            
+
+            # Mode simulation: générer un MP3 silencieux local sans appels réseau
+            if current_app.config.get('SIMULATE_TTS', False):
+                if session_id:
+                    audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
+                else:
+                    audio_filename = f"response_{uuid.uuid4()}.mp3"
+
+                backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                audio_dir = os.path.join(backend_dir, "audio_responses")
+                os.makedirs(audio_dir, exist_ok=True)
+                audio_path = os.path.join(audio_dir, audio_filename)
+
+                try:
+                    with open(audio_path, 'wb') as f:
+                        f.write(base64.b64decode(SILENT_MP3_BASE64))
+                    base_url = current_app.config.get('URL_BACKEND', os.getenv('URL_BACKEND', 'http://localhost:5001'))
+                    audio_url = f"{base_url}/synthesis/audio_responses/{audio_filename}"
+                    logger.info(f"Mode SIMULATE_TTS: fichier audio de secours généré {audio_filename}")
+                    return {"audio_url": audio_url, "filename": audio_filename}
+                except Exception as e:
+                    logger.error(f"Erreur lors de la génération du MP3 de simulation: {str(e)}")
+                    return {'error': 'Erreur de génération audio en mode simulation'}, 500
+
             # Traiter le texte avec Groq
             processed_text = process_text_with_groq(text)
             
@@ -199,7 +254,7 @@ class SynthesisResource(Resource):
             
             if audio_filename:
                 # Construire l'URL dynamiquement basée sur la requête
-                base_url = os.getenv('URL_BACKEND')
+                base_url = current_app.config.get('URL_BACKEND', os.getenv('URL_BACKEND'))
                 print(base_url)
                 print(base_url)
                 audio_url = f"{base_url}/synthesis/audio_responses/{audio_filename}"

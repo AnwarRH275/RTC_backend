@@ -1,4 +1,5 @@
 from flask import Flask
+from flask import request
 from flask_restx import Api, Resource
 from config import DevConfig, ProdConfig
 import os
@@ -79,6 +80,53 @@ def handle_jwt_exceptions(error):
 
 db.init_app(app)
 
+# --- Sécurité CORS supplémentaire (préflight et en-têtes explicites) ---
+# Cette section complète Flask-CORS pour garantir les en-têtes côté proxy.
+ALLOWED_ORIGINS = [
+    "https://expressiontcf.com",
+    "https://www.expressiontcf.com",
+    "https://api.expressiontcf.com",
+]
+
+@app.after_request
+def add_cors_headers(response):
+    try:
+        origin = request.headers.get("Origin")
+        is_prod = os.environ.get('FLASK_ENV') == 'production'
+
+        if is_prod and origin in ALLOWED_ORIGINS:
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Vary"] = "Origin"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+            )
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+            )
+            response.headers["Access-Control-Expose-Headers"] = (
+                "Content-Range, X-Content-Range"
+            )
+        else:
+            # Mode développement: permissif
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = (
+                "Content-Type, Authorization, X-Requested-With, Accept, Origin"
+            )
+            response.headers["Access-Control-Allow-Methods"] = (
+                "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+            )
+
+        # Référence: les réponses OPTIONS seront gérées ci-dessous
+        return response
+    except Exception:
+        return response
+
+@app.route('/<path:any_path>', methods=['OPTIONS'])
+def cors_preflight(any_path):
+    # Réponse vide pour le préflight; les en-têtes sont ajoutés par after_request
+    return ('', 204)
+
 # --- Initialisation automatique de la base de données au démarrage ---
 # Crée les tables si elles n'existent pas et insère les données par défaut
 try:
@@ -154,7 +202,9 @@ def initialize_data():
 
 if __name__ == '__main__':
     # Activer le threading pour permettre le traitement concurrent des requêtes
-    app.run(debug=True, port=5002, threaded=True)
+    debug_mode = os.environ.get('FLASK_ENV') != 'production'
+    port = int(os.environ.get('PORT', 5001))
+    app.run(host='0.0.0.0', debug=debug_mode, port=port, threaded=True)
 else:
     application = app
 #docker build --platform linux/amd64 -f Dockerfile.dev -t reussir-tcf-backend-dev-linux . 

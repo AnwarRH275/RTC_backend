@@ -28,18 +28,25 @@ class Config:
     STRIPE_TEST_PRODUCT_PERFORMANCE = config('STRIPE_TEST_PRODUCT_PERFORMANCE', default='')
     STRIPE_TEST_PRODUCT_PRO = config('STRIPE_TEST_PRODUCT_PRO', default='')
 
+    # Simulation flags
+    SIMULATE_AGENTUSER = config('SIMULATE_AGENTUSER', cast=bool, default=False)
+    SIMULATION_USERNAME = config('SIMULATION_USERNAME', default='agentuser')
+    SIMULATION_SECRET = config('SIMULATION_SECRET', default='')
+    SIMULATE_TTS = config('SIMULATE_TTS', cast=bool, default=False)
+    URL_BACKEND = config('URL_BACKEND', default='http://localhost:5001')
+
 
 class DevConfig(Config):
     # Permet d'utiliser DATABASE_URL si présent, sinon on retombe sur SQLite dev.db
-    SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'dev.db'))
-    #SQLALCHEMY_DATABASE_URI = "sqlite:///"+os.path.join(BASE_DIR, 'dev.db')
+    #SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'dev.db'))
+    SQLALCHEMY_DATABASE_URI = "sqlite:///"+os.path.join(BASE_DIR, 'dev.db')
     DEBUG = True
     SQLALCHEMY_ECHO = True
 
 
 class ProdConfig(Config):
     STRIPE_MODE = 'live'
-    SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'prod.db'))
+    SQLALCHEMY_DATABASE_URI = config('DATABASE_URL', default="sqlite:///"+os.path.join(BASE_DIR, 'dev.db'))
     DEBUG = False
     SQLALCHEMY_ECHO = False
 

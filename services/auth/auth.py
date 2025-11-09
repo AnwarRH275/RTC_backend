@@ -1,4 +1,4 @@
-from flask import request, jsonify, make_response, g
+from flask import request, jsonify, make_response, g, current_app
 from flask_restx import Resource, Namespace, fields
 from flask_jwt_extended import JWTManager, create_access_token, create_refresh_token, jwt_required, get_jwt_identity
 from models.model import User
@@ -9,6 +9,7 @@ import string
 from services.email.email_service import EmailService, email_service
 from services.moderator_permissions import ModeratorPermissions, validate_moderator_access
 import logging
+import os
 
 # Configuration du logging
 logging.basicConfig(level=logging.INFO)
@@ -206,6 +207,58 @@ class Login(Resource):
             }
         else:
             return {"message": "Mot de passe invalide"}, 401
+
+
+@auth_ns.route('/simulate-login')
+class SimulateLogin(Resource):
+    def post(self):
+        """Émet un token JWT pour un utilisateur simulé (agentuser) si la simulation est activée.
+        Protégé par un secret optionnel via SIMULATION_SECRET.
+        """
+        try:
+            simulate_enabled = current_app.config.get('SIMULATE_AGENTUSER', False)
+            if not simulate_enabled:
+                return {"message": "Mode simulation désactivé côté serveur"}, 403
+
+            data = request.get_json() or {}
+            provided_secret = data.get('secret')
+            required_secret = current_app.config.get('SIMULATION_SECRET', '')
+            if required_secret and provided_secret != required_secret:
+                return {"message": "Secret de simulation invalide"}, 403
+
+            username = data.get('username') or current_app.config.get('SIMULATION_USERNAME', 'agentuser')
+
+            # Rechercher ou créer l'utilisateur simulé
+            user = User.query.filter_by(username=username).first()
+            if user is None:
+                user = User(
+                    username=username,
+                    email=f"{username}@example.local",
+                    password=generate_password_hash('password'),
+                    nom='Agent',
+                    prenom='User',
+                    tel='',
+                    sexe='',
+                    date_naissance='',
+                    subscription_plan='standard',
+                    payment_status='paid',
+                    role='client',
+                    sold=0.0,
+                    total_sold=0.0,
+                    created_by='simulation'
+                )
+                db.session.add(user)
+                db.session.commit()
+
+            access_token = create_access_token(identity=user.username)
+            refresh_token = create_refresh_token(identity=user.username)
+            return {
+                'access_token': access_token,
+                'refresh_token': refresh_token,
+                'user_info': user.to_dict()
+            }, 200
+        except Exception as e:
+            return {"message": f"Erreur lors de la simulation de connexion: {str(e)}"}, 500
 
 
 @auth_ns.route('/counter')
