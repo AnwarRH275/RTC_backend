@@ -68,20 +68,25 @@ VOICE_CANDIDATES = [
 ]
 
 # MP3 silencieux (≈1s) encodé en base64 pour le mode simulation
-SILENT_MP3_BASE64 = (
-    "SUQzAwAAAAAAJAAAAGZyZWUAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/7QAAfQAAAwAAAAEAAACQAAACAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//sQAAH0AAADAAAABAAAAJAAAAgAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-    "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-)
+SILENT_MP3_BASE64 = "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASW5mbwAAAA8AAAASAAAeMwAUFBQUFCIiIiIiIjAwMDAwPj4+Pj4+TExMTExZWVlZWVlnZ2dnZ3V1dXV1dYODg4ODkZGRkZGRn5+fn5+frKysrKy6urq6urrIyMjIyNbW1tbW1uTk5OTk8vLy8vLy//////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAQKAAAAAAAAHjOZTf9/AAAAAAAAAAAAAAAAAAAAAP/7kGQAD/AAAGkAAAAIAAANIAAAAQAAAaQAAAAgAAA0gAAABExBTUUzLjEwMFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//uQZAQP8AAAaQAAAAgAAA0gAAABAAABpAAAACAAADSAAAAEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQ=="
 
 async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", session_id: str = None) -> str:
     """Synthétise le texte en audio avec EdgeTTS.
     Corrige la voix par défaut (format attendu par edge-tts) et essaie des voix de repli.
     """
+    # Valider et nettoyer le texte
+    if not text or not text.strip():
+        logger.error("Le texte fourni à EdgeTTS est vide")
+        return ""
+    
+    # Nettoyer le texte (supprimer les caractères de contrôle problématiques)
+    text = text.strip()
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', '', text)
+    
+    if len(text) > 5000:
+        logger.warning(f"Texte trop long ({len(text)} caractères), troncature à 5000 caractères")
+        text = text[:5000]
+    
     if session_id:
         audio_filename = f"response_{session_id}_{uuid.uuid4()}.mp3"
     else:
@@ -99,14 +104,43 @@ async def synthesize_with_edgetts(text: str, voice: str = "fr-FR-HenriNeural", s
 
     for v in voices_to_try:
         try:
+            logger.info(f"Tentative de synthèse avec la voix {v} - Texte: {text[:100]}...")
             communicate = edge_tts.Communicate(text, v)
-            await communicate.save(audio_path)
-            logger.info(f"Audio généré avec EdgeTTS: {audio_filename} (voice={v})")
-            return audio_filename
+            
+            # Ajouter un timeout de 10 secondes pour éviter d'attendre trop longtemps
+            await asyncio.wait_for(communicate.save(audio_path), timeout=10.0)
+            
+            # Vérifier que le fichier audio a bien été créé et n'est pas vide
+            if os.path.exists(audio_path) and os.path.getsize(audio_path) > 0:
+                file_size = os.path.getsize(audio_path)
+                logger.info(f"Audio généré avec EdgeTTS: {audio_filename} (voice={v}, size={file_size} bytes)")
+                return audio_filename
+            else:
+                logger.error(f"Erreur EdgeTTS avec la voix {v}: Fichier audio vide ou non créé")
+                # Nettoyer le fichier vide s'il existe
+                if os.path.exists(audio_path):
+                    os.remove(audio_path)
+                continue
+        except asyncio.TimeoutError:
+            logger.error(f"Timeout EdgeTTS avec la voix {v} (10s dépassées)")
+            # Nettoyer le fichier s'il a été partiellement créé
+            if os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                except:
+                    pass
+            continue
         except Exception as e:
             logger.error(f"Erreur EdgeTTS avec la voix {v}: {e}")
+            # Nettoyer le fichier s'il a été partiellement créé
+            if os.path.exists(audio_path):
+                try:
+                    os.remove(audio_path)
+                except:
+                    pass
             continue
 
+    # Si aucune voix n'a réussi, retourner une erreur
     logger.error("Échec EdgeTTS: aucune voix n'a réussi à générer l'audio")
     return ""
 
